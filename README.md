@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 1 — Foundation is implemented, activated, and verified.
+Increment 2 — Contact Management is implemented and awaiting user verification.
 
-This increment is not the usable application. Contact management begins in Increment 2, and the first real-world trial begins only after the complete functional core has passed regression testing.
+This increment is not yet the complete usable application. Contact history begins in Increment 3, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step: Increment 2 — create, edit, and deliberately delete contacts and their permanent contact information.
+Next exact step after verification: Increment 3 — successful and attempted interaction history.
 
 ## Governing principles
 
@@ -45,7 +45,7 @@ Next exact step: Increment 2 — create, edit, and deliberately delete contacts 
 }
 ```
 
-Each future contact and history entry will have a stable internal ID. Names will not be identifiers.
+Each contact has a stable internal ID. Names are not identifiers. Each future history entry will also receive a stable internal ID.
 
 ## Known destination rules
 
@@ -81,8 +81,21 @@ When an application-shell file changes, update `CACHE_NAME` in `service-worker.j
 7. At tablet/desktop width, confirm navigation moves below the header and content remains readable.
 8. Install/add the app to the home screen after the first online load, close it, turn on airplane mode, and confirm it launches offline.
 
+## Increment 2 verification
+
+1. Open Contacts and add a fictional contact with only a name.
+2. Add a second fictional contact using name, address, phone, email, and a multi-line General Note.
+3. Confirm both contacts appear and the list remains readable.
+4. Reload or fully close and reopen the app; confirm both records return unchanged.
+5. Edit the first contact, add or change several fields, save, and reload again.
+6. Try to save a contact with no name; confirm the app requires a name without losing other entered information.
+7. Tap Delete on one contact, cancel the confirmation, and confirm the contact remains.
+8. Delete that contact again and approve the confirmation; confirm only that record is removed.
+9. Open Home and Data; confirm their contact totals match the remaining records.
+10. Confirm the contact form and cards have no sideways scrolling on the intended phone and tablet layouts.
+
 ## Known limitations
 
-- The operational contact workflow is intentionally not implemented yet.
+- Interaction history and scheduling are intentionally not implemented yet.
 - Backup and Restore are not active until Increment 10.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.
