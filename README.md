@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 5 — Needs Follow-Up is implemented and awaiting user verification. Increments 1–4 are verified.
+Increment 5 — Needs Follow-Up is implemented, activated, and verified. Increments 1–5 are verified.
 
 This increment is not yet the complete usable application. Pause and Resume begin in Increment 6, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step after verification: Increment 6 — timed and indefinite Pause/Resume behavior.
+Next exact step: Increment 6 — timed and indefinite Pause/Resume behavior.
 
 ## Governing principles
 
@@ -145,6 +145,8 @@ Status: verified.
 10. Reload or completely reopen the app and confirm the groups, counts, and order remain correct.
 11. Confirm a contact without any schedule does not appear on Home but remains available under Contacts.
 12. Confirm the Home list has no sideways scrolling on phone and tablet layouts.
+
+Status: verified. Testing also confirmed the installed-PWA update path after the automatic reload-on-activation correction.
 
 ## Known limitations
 
