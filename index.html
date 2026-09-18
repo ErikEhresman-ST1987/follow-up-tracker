@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#255f57">
+    <meta name="description" content="A private, local-first ministry follow-up tracker.">
+    <title>Follow-Up Tracker</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="app-header">
+      <div class="app-header__inner">
+        <div>
+          <p class="eyebrow">Private · stored on this device</p>
+          <h1>Follow-Up Tracker</h1>
+        </div>
+        <span class="save-status" id="save-status" role="status" aria-live="polite">Starting…</span>
+      </div>
+    </header>
+    <main id="main-content" class="app-main" tabindex="-1"></main>
+    <nav class="app-nav" aria-label="Primary navigation">
+      <div class="app-nav__inner">
+        <button class="nav-item" type="button" data-screen="home" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span><span>Home</span></button>
+        <button class="nav-item" type="button" data-screen="contacts"><span class="nav-icon" aria-hidden="true">◎</span><span>Contacts</span></button>
+        <button class="nav-item" type="button" data-screen="studies"><span class="nav-icon" aria-hidden="true">◇</span><span>Studies</span></button>
+        <button class="nav-item" type="button" data-screen="report"><span class="nav-icon" aria-hidden="true">▤</span><span>Report</span></button>
+        <button class="nav-item" type="button" data-screen="data"><span class="nav-icon" aria-hidden="true">⚙</span><span>Data</span></button>
+      </div>
+    </nav>
+    <noscript><p class="noscript-message">Follow-Up Tracker requires JavaScript to run.</p></noscript>
+  </body>
+</html>
