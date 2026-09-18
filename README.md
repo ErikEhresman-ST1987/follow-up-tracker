@@ -4,7 +4,7 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 6 — Pause and Resume is implemented and awaiting user verification. Increments 1–5 are verified.
+Increment 6 — Pause and Resume is implemented, activated, and verified. Increments 1–6 are verified.
 
 This increment is not yet the complete usable application. Finding and contact actions begin in Increment 7, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
@@ -162,7 +162,7 @@ Status: verified. Testing also confirmed the installed-PWA update path after the
 10. Confirm pause forms, banners, cards, and controls have no sideways scrolling on phone and tablet layouts.
 11. After loading the update online, launch the installed app offline and confirm pause information remains available.
 
-Status: awaiting user verification.
+Status: verified.
 
 ## Known limitations
 
