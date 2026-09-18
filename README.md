@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 1 — Foundation is implemented and awaiting user verification.
+Increment 1 — Foundation is implemented, activated, and verified.
 
 This increment is not the usable application. Contact management begins in Increment 2, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step after verification: Increment 2 — create, edit, and deliberately delete contacts and their permanent contact information.
+Next exact step: Increment 2 — create, edit, and deliberately delete contacts and their permanent contact information.
 
 ## Governing principles
 
@@ -85,5 +85,4 @@ When an application-shell file changes, update `CACHE_NAME` in `service-worker.j
 
 - The operational contact workflow is intentionally not implemented yet.
 - Backup and Restore are not active until Increment 10.
-- Offline and installed behavior still require real-device verification.
-- iOS, Android, tablet, and desktop support are not considered verified until exercised on those devices.
+- Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.
