@@ -10,6 +10,8 @@
   let contactEditor = null;
   let activeContactId = null;
   let interactionEditor = null;
+  let pauseEditor = false;
+  let showPausedOnly = false;
 
   const mainElement = document.querySelector("#main-content");
   const saveStatusElement = document.querySelector("#save-status");
@@ -201,6 +203,19 @@
 
   function deriveLastContact(contact) {
     return sortedHistory(contact).find(isSuccessfulEntry) || null;
+  }
+
+  function isActivelyPaused(contact, comparisonDate = todayDateValue()) {
+    return contact.pause.status === "indefinite"
+      || (contact.pause.status === "untilDate" && contact.pause.untilDate > comparisonDate);
+  }
+
+  function renderPauseText(contact) {
+    if (contact.pause.status === "indefinite") return "Paused indefinitely";
+    if (contact.pause.status === "untilDate" && contact.pause.untilDate > todayDateValue()) {
+      return `Paused until ${formatDate(contact.pause.untilDate)}`;
+    }
+    return "Active";
   }
 
   function addDays(dateValue, numberOfDays) {
@@ -489,10 +504,56 @@
       </article>`;
   }
 
+  function renderPauseForm(contact) {
+    const selectedStatus = isActivelyPaused(contact) ? contact.pause.status : "untilDate";
+    return `
+      <section aria-labelledby="pause-form-title">
+        <header class="screen-heading screen-heading--actions">
+          <div>
+            <p class="section-label">Pause follow-up</p>
+            <h2 id="pause-form-title">${escapeHtml(contact.name)}</h2>
+            <p>Pause removes this person from Needs Follow-Up without changing their history or schedule.</p>
+          </div>
+          <button class="button button--secondary" type="button" data-action="cancel-pause">Cancel</button>
+        </header>
+        <form id="pause-form" class="contact-form" novalidate>
+          <fieldset class="field-group field--full">
+            <legend>Pause Length</legend>
+            <div class="choice-list">
+              <label class="choice-row">
+                <input type="radio" name="pauseStatus" value="untilDate" ${selectedStatus === "untilDate" ? "checked" : ""}>
+                <span>Pause until a date</span>
+              </label>
+              <label class="choice-row">
+                <input type="radio" name="pauseStatus" value="indefinite" ${selectedStatus === "indefinite" ? "checked" : ""}>
+                <span>Pause indefinitely</span>
+              </label>
+            </div>
+          </fieldset>
+          <div class="field field--full" data-pause-date ${selectedStatus === "untilDate" ? "" : "hidden"}>
+            <label for="pause-until-date">Resume on <span aria-hidden="true">*</span></label>
+            <input id="pause-until-date" name="pauseUntilDate" type="date" min="${addDays(todayDateValue(), 1)}" value="${escapeHtml(isActivelyPaused(contact) && contact.pause.status === "untilDate" ? contact.pause.untilDate : "")}">
+            <p class="field-help">The contact automatically returns to normal Needs Follow-Up behavior on this date.</p>
+            <p class="field-error" id="pause-date-error" hidden>Choose a date after today.</p>
+          </div>
+          <div class="field field--full">
+            <label for="pause-reason">Reason</label>
+            <textarea id="pause-reason" name="pauseReason" rows="3" maxlength="1000">${escapeHtml(contact.pause.reason)}</textarea>
+          </div>
+          <div class="form-actions field--full">
+            <button class="button button--primary" type="submit">Save Pause</button>
+            <button class="button button--secondary" type="button" data-action="cancel-pause">Cancel</button>
+          </div>
+        </form>
+      </section>`;
+  }
+
   function renderContactDetail(contact) {
     if (interactionEditor) return renderInteractionForm(contact);
+    if (pauseEditor) return renderPauseForm(contact);
     const history = sortedHistory(contact);
     const lastContact = deriveLastContact(contact);
+    const isPaused = isActivelyPaused(contact);
     return `
       <section aria-labelledby="contact-detail-title">
         <header class="screen-heading">
@@ -503,9 +564,14 @@
               <p>Last Contact: ${lastContact ? escapeHtml(formatDate(lastContact.date, lastContact.time)) : "None recorded"}</p>
               <p>Next Follow-Up: ${escapeHtml(renderScheduleText(contact))}</p>
             </div>
-            <button class="button button--secondary" type="button" data-action="edit-contact" data-contact-id="${escapeHtml(contact.id)}">Edit Contact</button>
+            <div class="detail-actions">
+              <button class="button ${isPaused ? "button--primary" : "button--secondary"}" type="button" data-action="${isPaused ? "resume-contact" : "pause-contact"}" data-contact-id="${escapeHtml(contact.id)}">${isPaused ? "Resume" : "Pause"}</button>
+              <button class="button button--secondary" type="button" data-action="edit-contact" data-contact-id="${escapeHtml(contact.id)}">Edit Contact</button>
+            </div>
           </div>
         </header>
+
+        ${isPaused ? `<aside class="pause-banner"><strong>${escapeHtml(renderPauseText(contact))}</strong>${contact.pause.reason ? `<span>${escapeHtml(contact.pause.reason)}</span>` : ""}</aside>` : ""}
 
         <article class="panel contact-profile">
           ${contact.address ? `<div><span>Address</span><p>${escapeHtml(contact.address)}</p></div>` : ""}
@@ -531,12 +597,14 @@
   function renderContactCard(contact) {
     const details = [contact.address, contact.phone, contact.email].filter(Boolean);
     const lastContact = deriveLastContact(contact);
+    const isPaused = isActivelyPaused(contact);
     return `
       <article class="contact-card">
         <div class="contact-card__body">
-          <h3>${escapeHtml(contact.name)}</h3>
+          <div class="follow-up-item__title-row"><h3>${escapeHtml(contact.name)}</h3>${isPaused ? `<span class="pause-badge">Paused</span>` : ""}</div>
           <p class="contact-card__last">Last Contact: ${lastContact ? escapeHtml(formatDate(lastContact.date)) : "None recorded"}</p>
-          <p class="contact-card__last">Next Follow-Up: ${escapeHtml(renderScheduleText(contact))}</p>
+          <p class="contact-card__last">${isPaused ? escapeHtml(renderPauseText(contact)) : `Next Follow-Up: ${escapeHtml(renderScheduleText(contact))}`}</p>
+          ${isPaused && contact.pause.reason ? `<p class="pause-reason">${escapeHtml(contact.pause.reason)}</p>` : ""}
           ${details.length ? `<div class="contact-details">${details.map((detail) => `<p>${escapeHtml(detail)}</p>`).join("")}</div>` : `<p class="muted-text">No contact details added.</p>`}
           ${contact.generalNote ? `<p class="contact-note">${escapeHtml(contact.generalNote)}</p>` : ""}
         </div>
@@ -579,14 +647,19 @@
         activeContactId = null;
         interactionEditor = null;
       }
-      const contacts = sortedContacts();
+      const allContacts = sortedContacts();
+      const pausedCount = allContacts.filter((contact) => isActivelyPaused(contact)).length;
+      const contacts = showPausedOnly ? allContacts.filter((contact) => isActivelyPaused(contact)) : allContacts;
       return `
         <section aria-labelledby="contacts-title">
           <header class="screen-heading screen-heading--actions">
-            <div><h2 id="contacts-title">Contacts</h2><p>${contacts.length === 0 ? "Create the first permanent contact record." : `${contacts.length} ${contacts.length === 1 ? "person" : "people"}`}</p></div>
-            <button class="button button--primary" type="button" data-action="new-contact">Add Contact</button>
+            <div><h2 id="contacts-title">${showPausedOnly ? "Paused Contacts" : "Contacts"}</h2><p>${showPausedOnly ? `${pausedCount} currently paused` : contacts.length === 0 ? "Create the first permanent contact record." : `${contacts.length} ${contacts.length === 1 ? "person" : "people"}`}</p></div>
+            <div class="heading-actions">
+              <button class="button button--secondary" type="button" data-action="toggle-paused-view">${showPausedOnly ? "All Contacts" : `Paused (${pausedCount})`}</button>
+              <button class="button button--primary" type="button" data-action="new-contact">Add Contact</button>
+            </div>
           </header>
-          ${contacts.length === 0 ? `<article class="empty-state"><p class="section-label">Ready to begin</p><h3>No contacts yet</h3><p>Add a person’s permanent information here, then open their record to begin the continuous history.</p></article>` : `<div class="contact-list">${contacts.map(renderContactCard).join("")}</div>`}
+          ${contacts.length === 0 ? `<article class="empty-state"><p class="section-label">${showPausedOnly ? "Paused contacts" : "Ready to begin"}</p><h3>${showPausedOnly ? "No paused contacts" : "No contacts yet"}</h3><p>${showPausedOnly ? "Contacts paused until a future date or indefinitely will appear here." : "Add a person’s permanent information here, then open their record to begin the continuous history."}</p></article>` : `<div class="contact-list">${contacts.map(renderContactCard).join("")}</div>`}
         </section>`;
     },
     studies() {
@@ -620,6 +693,8 @@
     contactEditor = null;
     activeContactId = null;
     interactionEditor = null;
+    pauseEditor = false;
+    showPausedOnly = false;
     renderActiveScreen();
     mainElement.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -778,6 +853,46 @@
     renderActiveScreen();
   }
 
+  function savePause(form) {
+    const contact = appState.contacts.find((item) => item.id === activeContactId);
+    if (!contact) return;
+    const formData = new FormData(form);
+    const status = formData.get("pauseStatus") === "indefinite" ? "indefinite" : "untilDate";
+    const untilDate = textOrEmpty(formData.get("pauseUntilDate"));
+    const reason = textOrEmpty(formData.get("pauseReason")).trim();
+
+    if (status === "untilDate" && (!untilDate || untilDate <= todayDateValue())) {
+      const dateInput = form.elements.pauseUntilDate;
+      dateInput.setAttribute("aria-invalid", "true");
+      form.querySelector("#pause-date-error").hidden = false;
+      dateInput.focus();
+      return;
+    }
+
+    const nextContacts = appState.contacts.map((item) => item.id === contact.id ? {
+      ...item,
+      pause: { status, untilDate: status === "untilDate" ? untilDate : "", reason },
+      updatedAt: new Date().toISOString()
+    } : item);
+    appState = persistence.save({ ...appState, contacts: nextContacts });
+    pauseEditor = false;
+    renderActiveScreen();
+  }
+
+  function resumeContact(contactId) {
+    const contact = appState.contacts.find((item) => item.id === contactId);
+    if (!contact) return;
+    const confirmed = window.confirm(`Resume follow-up for ${contact.name}?`);
+    if (!confirmed) return;
+    const nextContacts = appState.contacts.map((item) => item.id === contact.id ? {
+      ...item,
+      pause: { status: "active", untilDate: "", reason: "" },
+      updatedAt: new Date().toISOString()
+    } : item);
+    appState = persistence.save({ ...appState, contacts: nextContacts });
+    renderActiveScreen();
+  }
+
   function deleteContact(contactId) {
     const contact = appState.contacts.find((item) => item.id === contactId);
     if (!contact) return;
@@ -796,6 +911,8 @@
       activeContactId = contactId;
       contactEditor = null;
       interactionEditor = null;
+      pauseEditor = false;
+      showPausedOnly = false;
       renderActiveScreen();
       mainElement.focus({ preventScroll: true });
       window.scrollTo({ top: 0, behavior: "auto" });
@@ -805,6 +922,10 @@
       contactEditor = { contactId: null };
       renderActiveScreen();
       mainElement.querySelector("#contact-name")?.focus();
+    }
+    if (action === "toggle-paused-view") {
+      showPausedOnly = !showPausedOnly;
+      renderActiveScreen();
     }
     if (action === "edit-contact") {
       activeContactId = contactId;
@@ -819,11 +940,13 @@
     if (action === "open-contact") {
       activeContactId = contactId;
       interactionEditor = null;
+      pauseEditor = false;
       renderActiveScreen();
     }
     if (action === "back-to-contacts") {
       activeContactId = null;
       interactionEditor = null;
+      pauseEditor = false;
       renderActiveScreen();
     }
     if (action === "add-successful" || action === "add-attempted") {
@@ -843,6 +966,17 @@
       interactionEditor = null;
       renderActiveScreen();
     }
+    if (action === "pause-contact") {
+      activeContactId = contactId;
+      pauseEditor = true;
+      interactionEditor = null;
+      renderActiveScreen();
+    }
+    if (action === "cancel-pause") {
+      pauseEditor = false;
+      renderActiveScreen();
+    }
+    if (action === "resume-contact") resumeContact(contactId);
     if (action === "delete-interaction") deleteInteraction(actionElement.dataset.entryId);
     if (action === "delete-contact") deleteContact(contactId);
   }
@@ -864,6 +998,10 @@
       if (event.target.id === "interaction-form") {
         event.preventDefault();
         saveInteraction(event.target);
+      }
+      if (event.target.id === "pause-form") {
+        event.preventDefault();
+        savePause(event.target);
       }
     });
     mainElement.addEventListener("input", (event) => {
@@ -892,6 +1030,11 @@
         const error = mainElement.querySelector("#next-date-error");
         if (error) error.hidden = true;
       }
+      if (event.target.name === "pauseUntilDate" && event.target.value > todayDateValue()) {
+        event.target.removeAttribute("aria-invalid");
+        const error = mainElement.querySelector("#pause-date-error");
+        if (error) error.hidden = true;
+      }
     });
     mainElement.addEventListener("change", (event) => {
       if (event.target.name === "intervalSelection") {
@@ -901,6 +1044,10 @@
       if (event.target.name === "nextFollowUpMode") {
         const specificFields = mainElement.querySelector("[data-interaction-specific]");
         if (specificFields) specificFields.hidden = event.target.value !== "specific";
+      }
+      if (event.target.name === "pauseStatus") {
+        const dateFields = mainElement.querySelector("[data-pause-date]");
+        if (dateFields) dateFields.hidden = event.target.value !== "untilDate";
       }
     });
   }

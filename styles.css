@@ -395,6 +395,35 @@ h3 { margin: 0; font-size: 1.05rem; }
   padding-top: 0.25rem;
 }
 
+.heading-actions,
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.choice-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.choice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+  font-weight: 720;
+}
+
+.choice-row input {
+  width: 1.25rem;
+  min-height: 1.25rem;
+  flex: 0 0 1.25rem;
+  margin: 0;
+}
+
 .contact-list {
   display: grid;
   gap: 1rem;
@@ -413,6 +442,26 @@ h3 { margin: 0; font-size: 1.05rem; }
 }
 
 .contact-card__body { min-width: 0; }
+
+.pause-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  border-radius: 999px;
+  background: #f3e5c9;
+  color: #6b4a13;
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.03em;
+  padding: 0.16rem 0.5rem;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.pause-reason {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
 
 .contact-card__last {
   margin: 0.35rem 0 0;
@@ -493,6 +542,23 @@ h3 { margin: 0; font-size: 1.05rem; }
 }
 
 .contact-profile__full { grid-column: 1 / -1; }
+
+.pause-banner {
+  margin: 0 0 1rem;
+  border-left: 5px solid #a6742e;
+  border-radius: 0.75rem;
+  background: #fbf3e4;
+  color: #553b11;
+  padding: 0.85rem 1rem;
+  font-weight: 760;
+}
+
+.pause-banner span {
+  display: block;
+  margin-top: 0.2rem;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
 
 .history-section { margin-top: 1.5rem; }
 
@@ -602,6 +668,10 @@ h3 { margin: 0; font-size: 1.05rem; }
   .summary-card__label { margin: 0; }
   .screen-heading--actions { align-items: stretch; flex-direction: column; }
   .screen-heading--actions > .button { width: 100%; }
+  .heading-actions,
+  .detail-actions { justify-content: stretch; }
+  .heading-actions .button,
+  .detail-actions .button { flex: 1 1 9rem; }
   .contact-form { grid-template-columns: 1fr; padding: 1rem; }
   .schedule-fields { grid-template-columns: 1fr; }
   .contact-card { grid-template-columns: 1fr; }

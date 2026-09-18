@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 5 — Needs Follow-Up is implemented, activated, and verified. Increments 1–5 are verified.
+Increment 6 — Pause and Resume is implemented and awaiting user verification. Increments 1–5 are verified.
 
-This increment is not yet the complete usable application. Pause and Resume begin in Increment 6, and the first real-world trial begins only after the complete functional core has passed regression testing.
+This increment is not yet the complete usable application. Finding and contact actions begin in Increment 7, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step: Increment 6 — timed and indefinite Pause/Resume behavior.
+Next exact step after Increment 6 verification: Increment 7 — alphabetical browsing, practical search, and phone/email/address actions.
 
 ## Governing principles
 
@@ -148,8 +148,24 @@ Status: verified.
 
 Status: verified. Testing also confirmed the installed-PWA update path after the automatic reload-on-activation correction.
 
+## Increment 6 verification
+
+1. Pause an overdue fictional contact until a future date; confirm the person disappears from Home and appears in the Paused Contacts view.
+2. Open the paused contact and confirm Last Contact, history, normal interval, and any specific arrangement are unchanged.
+3. Pause another contact indefinitely with a short reason; confirm the person disappears from Home and the reason appears on the contact record and contact card.
+4. Reload or completely reopen the app; confirm both pause states remain intact.
+5. Open Contacts and toggle between All Contacts and Paused; confirm All Contacts includes everyone and Paused includes only contacts whose pause is currently active.
+6. Resume a paused contact, cancel the confirmation, and confirm the pause remains.
+7. Resume the contact again and approve; confirm its existing schedule returns unchanged and it appears in the correct Home group.
+8. Try to create a timed pause with today or an earlier date; confirm the app requires a future date without clearing the other fields.
+9. Confirm a timed pause clearly shows its resume date and an indefinite pause clearly says Paused indefinitely.
+10. Confirm pause forms, banners, cards, and controls have no sideways scrolling on phone and tablet layouts.
+11. After loading the update online, launch the installed app offline and confirm pause information remains available.
+
+Status: awaiting user verification.
+
 ## Known limitations
 
-- Pause controls are intentionally deferred to Increment 6.
+- Search and direct phone, email, and address actions are intentionally deferred to Increment 7.
 - Backup and Restore are not active until Increment 10.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.
