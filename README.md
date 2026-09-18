@@ -68,6 +68,8 @@ A Bible Study remains a state of the existing contact record, preserving the con
 
 The service worker caches the application shell. The first online load installs the offline files; later launches can load without a network connection. Ordinary browser use remains supported and installation is optional.
 
+When a newly deployed service worker takes control, the open app reloads once so the active screen uses the new application shell rather than continuing to display an older cached release.
+
 When an application-shell file changes, update `CACHE_NAME` in `service-worker.js` so installed copies activate the new shell reliably.
 
 ## Increment 1 verification

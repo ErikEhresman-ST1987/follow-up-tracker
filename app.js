@@ -907,8 +907,19 @@
 
   function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
+
+    let isReloadingForUpdate = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (isReloadingForUpdate) return;
+      isReloadingForUpdate = true;
+      window.location.reload();
+    });
+
     window.addEventListener("load", async () => {
-      try { await navigator.serviceWorker.register("./service-worker.js"); }
+      try {
+        const registration = await navigator.serviceWorker.register("./service-worker.js");
+        await registration.update();
+      }
       catch (error) { console.error("Offline support could not be activated.", error); }
     });
   }
