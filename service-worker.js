@@ -1,4 +1,4 @@
-const CACHE_NAME = "follow-up-tracker-shell-v2";
+const CACHE_NAME = "follow-up-tracker-shell-v3";
 const APP_SHELL = [
   "./",
   "./index.html",

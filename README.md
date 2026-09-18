@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 2 — Contact Management is implemented, activated, and verified.
+Increment 3 — Contact History is implemented and awaiting user verification.
 
-This increment is not yet the complete usable application. Contact history begins in Increment 3, and the first real-world trial begins only after the complete functional core has passed regression testing.
+This increment is not yet the complete usable application. Follow-up scheduling begins in Increment 4, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step: Increment 3 — successful and attempted interaction history.
+Next exact step after verification: Increment 4 — follow-up intervals, specific dates/times, and the scheduling engine.
 
 ## Governing principles
 
@@ -45,7 +45,7 @@ Next exact step: Increment 3 — successful and attempted interaction history.
 }
 ```
 
-Each contact has a stable internal ID. Names are not identifiers. Each future history entry will also receive a stable internal ID.
+Each contact and history entry has a stable internal ID. Names are not identifiers. History is owned by its contact and stored as one continuous relationship history.
 
 ## Known destination rules
 
@@ -94,8 +94,23 @@ When an application-shell file changes, update `CACHE_NAME` in `service-worker.j
 9. Open Home and Data; confirm their contact totals match the remaining records.
 10. Confirm the contact form and cards have no sideways scrolling on the intended phone and tablet layouts.
 
+## Increment 3 verification
+
+1. Open a fictional contact and confirm Last Contact initially says none recorded.
+2. Record a successful contact with date, optional time, discussion notes, scripture, and literature.
+3. Confirm it appears in history and becomes Last Contact.
+4. Record an attempted contact on a later date with a brief note.
+5. Confirm the attempt appears newest-first but does not replace Last Contact.
+6. Reload or fully close and reopen the app; confirm both entries return unchanged.
+7. Edit both entry types and confirm the corrections survive another reload.
+8. Try saving an entry without a date; confirm the date is required without clearing the other fields.
+9. Cancel deletion of one entry and confirm it remains.
+10. Delete the successful entry deliberately and confirm Last Contact returns to none while the attempted entry remains.
+11. Add two successful contacts on different dates and confirm Last Contact derives from the newer successful date.
+12. Confirm the contact detail, entry forms, and history remain readable without sideways scrolling on phone and tablet layouts.
+
 ## Known limitations
 
-- Interaction history and scheduling are intentionally not implemented yet.
+- Follow-up scheduling is intentionally not implemented yet.
 - Backup and Restore are not active until Increment 10.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.

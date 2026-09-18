@@ -8,6 +8,8 @@
   let appState = createDefaultState();
   let activeScreen = "home";
   let contactEditor = null;
+  let activeContactId = null;
+  let interactionEditor = null;
 
   const mainElement = document.querySelector("#main-content");
   const saveStatusElement = document.querySelector("#save-status");
@@ -58,6 +60,24 @@
     return typeof value === "string" ? value : "";
   }
 
+  function normalizeHistoryEntry(candidate) {
+    if (!isPlainObject(candidate)) return null;
+    const allowedTypes = ["successfulContact", "attemptedContact", "conductedStudy", "missedStudy"];
+    return {
+      ...candidate,
+      id: typeof candidate.id === "string" && candidate.id ? candidate.id : createId("history"),
+      type: allowedTypes.includes(candidate.type) ? candidate.type : "attemptedContact",
+      date: textOrEmpty(candidate.date),
+      time: textOrEmpty(candidate.time),
+      discussionNotes: textOrEmpty(candidate.discussionNotes),
+      scriptures: textOrEmpty(candidate.scriptures),
+      literature: textOrEmpty(candidate.literature),
+      note: textOrEmpty(candidate.note),
+      createdAt: textOrEmpty(candidate.createdAt),
+      updatedAt: textOrEmpty(candidate.updatedAt)
+    };
+  }
+
   function normalizeContact(candidate) {
     if (!isPlainObject(candidate)) return null;
 
@@ -97,7 +117,7 @@
         specificDate: textOrEmpty(bibleStudy.specificDate),
         specificTime: textOrEmpty(bibleStudy.specificTime)
       },
-      history: Array.isArray(candidate.history) ? candidate.history : [],
+      history: Array.isArray(candidate.history) ? candidate.history.map(normalizeHistoryEntry).filter(Boolean) : [],
       createdAt: textOrEmpty(candidate.createdAt),
       updatedAt: textOrEmpty(candidate.updatedAt)
     };
@@ -151,6 +171,38 @@
     return [...appState.contacts].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   }
 
+  function todayDateValue() {
+    const now = new Date();
+    const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 10);
+  }
+
+  function formatDate(dateValue, timeValue = "") {
+    if (!dateValue) return "Date unavailable";
+    const date = new Date(`${dateValue}T12:00:00`);
+    const formattedDate = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric" }).format(date);
+    if (!timeValue) return formattedDate;
+    const time = new Date(`${dateValue}T${timeValue}:00`);
+    const formattedTime = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(time);
+    return `${formattedDate} at ${formattedTime}`;
+  }
+
+  function historyTimestamp(entry) {
+    return `${entry.date || "0000-00-00"}T${entry.time || "00:00"}`;
+  }
+
+  function sortedHistory(contact) {
+    return [...contact.history].sort((a, b) => historyTimestamp(b).localeCompare(historyTimestamp(a)));
+  }
+
+  function isSuccessfulEntry(entry) {
+    return entry.type === "successfulContact" || entry.type === "conductedStudy";
+  }
+
+  function deriveLastContact(contact) {
+    return sortedHistory(contact).find(isSuccessfulEntry) || null;
+  }
+
   function renderSummaryCard(label) {
     return `<article class="summary-card"><span class="summary-card__value">0</span><span class="summary-card__label">${label}</span></article>`;
   }
@@ -200,16 +252,133 @@
       </section>`;
   }
 
+  function renderInteractionForm(contact) {
+    const existingEntry = interactionEditor.entryId
+      ? contact.history.find((entry) => entry.id === interactionEditor.entryId)
+      : null;
+    const type = existingEntry?.type || interactionEditor.type;
+    const isSuccessful = type === "successfulContact";
+    const date = existingEntry?.date || todayDateValue();
+
+    return `
+      <section aria-labelledby="interaction-form-title">
+        <header class="screen-heading screen-heading--actions">
+          <div>
+            <p class="section-label">${existingEntry ? "Edit history" : "New history"}</p>
+            <h2 id="interaction-form-title">${isSuccessful ? "Successful Contact" : "Attempted Contact"}</h2>
+            <p>${escapeHtml(contact.name)}</p>
+          </div>
+          <button class="button button--secondary" type="button" data-action="cancel-interaction">Cancel</button>
+        </header>
+        <form id="interaction-form" class="contact-form" novalidate>
+          <input type="hidden" name="type" value="${type}">
+          <div class="field">
+            <label for="interaction-date">Date <span aria-hidden="true">*</span></label>
+            <input id="interaction-date" name="date" type="date" required value="${escapeHtml(date)}">
+            <p class="field-error" id="date-error" hidden>Please enter a date.</p>
+          </div>
+          <div class="field">
+            <label for="interaction-time">Time</label>
+            <input id="interaction-time" name="time" type="time" value="${escapeHtml(existingEntry?.time || "")}">
+          </div>
+          ${isSuccessful ? `
+            <div class="field field--full">
+              <label for="discussion-notes">Discussion Notes</label>
+              <textarea id="discussion-notes" name="discussionNotes" rows="6" maxlength="10000">${escapeHtml(existingEntry?.discussionNotes || "")}</textarea>
+            </div>
+            <div class="field">
+              <label for="scriptures">Scripture(s)</label>
+              <textarea id="scriptures" name="scriptures" rows="3" maxlength="2000">${escapeHtml(existingEntry?.scriptures || "")}</textarea>
+            </div>
+            <div class="field">
+              <label for="literature">Literature Placed</label>
+              <textarea id="literature" name="literature" rows="3" maxlength="2000">${escapeHtml(existingEntry?.literature || "")}</textarea>
+            </div>` : `
+            <div class="field field--full">
+              <label for="attempt-note">Brief Note</label>
+              <textarea id="attempt-note" name="note" rows="4" maxlength="4000">${escapeHtml(existingEntry?.note || "")}</textarea>
+            </div>`}
+          <div class="form-actions field--full">
+            <button class="button button--primary" type="submit">${existingEntry ? "Save Changes" : "Save Entry"}</button>
+            <button class="button button--secondary" type="button" data-action="cancel-interaction">Cancel</button>
+          </div>
+        </form>
+      </section>`;
+  }
+
+  function renderHistoryEntry(entry) {
+    const isSuccessful = isSuccessfulEntry(entry);
+    const content = isSuccessful
+      ? [entry.discussionNotes, entry.scriptures ? `Scripture(s): ${entry.scriptures}` : "", entry.literature ? `Literature: ${entry.literature}` : ""].filter(Boolean)
+      : [entry.note].filter(Boolean);
+
+    return `
+      <article class="history-entry history-entry--${isSuccessful ? "successful" : "attempted"}">
+        <div class="history-entry__heading">
+          <div>
+            <p class="history-entry__type">${isSuccessful ? "Successful Contact" : "Attempted Contact"}</p>
+            <p class="history-entry__date">${escapeHtml(formatDate(entry.date, entry.time))}</p>
+          </div>
+          <div class="history-entry__actions">
+            <button class="text-button" type="button" data-action="edit-interaction" data-entry-id="${escapeHtml(entry.id)}">Edit</button>
+            <button class="text-button text-button--danger" type="button" data-action="delete-interaction" data-entry-id="${escapeHtml(entry.id)}">Delete</button>
+          </div>
+        </div>
+        ${content.length ? `<div class="history-entry__content">${content.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}</div>` : `<p class="muted-text">No additional notes.</p>`}
+      </article>`;
+  }
+
+  function renderContactDetail(contact) {
+    if (interactionEditor) return renderInteractionForm(contact);
+    const history = sortedHistory(contact);
+    const lastContact = deriveLastContact(contact);
+    return `
+      <section aria-labelledby="contact-detail-title">
+        <header class="screen-heading">
+          <button class="back-button" type="button" data-action="back-to-contacts">← All Contacts</button>
+          <div class="detail-title-row">
+            <div>
+              <h2 id="contact-detail-title">${escapeHtml(contact.name)}</h2>
+              <p>Last Contact: ${lastContact ? escapeHtml(formatDate(lastContact.date, lastContact.time)) : "None recorded"}</p>
+            </div>
+            <button class="button button--secondary" type="button" data-action="edit-contact" data-contact-id="${escapeHtml(contact.id)}">Edit Contact</button>
+          </div>
+        </header>
+
+        <article class="panel contact-profile">
+          ${contact.address ? `<div><span>Address</span><p>${escapeHtml(contact.address)}</p></div>` : ""}
+          ${contact.phone ? `<div><span>Phone</span><p>${escapeHtml(contact.phone)}</p></div>` : ""}
+          ${contact.email ? `<div><span>Email</span><p>${escapeHtml(contact.email)}</p></div>` : ""}
+          ${contact.generalNote ? `<div class="contact-profile__full"><span>General Note</span><p>${escapeHtml(contact.generalNote)}</p></div>` : ""}
+          ${![contact.address, contact.phone, contact.email, contact.generalNote].some(Boolean) ? `<p class="muted-text">No additional contact information.</p>` : ""}
+        </article>
+
+        <section class="history-section" aria-labelledby="history-title">
+          <div class="history-section__heading">
+            <div><p class="section-label">Continuous history</p><h3 id="history-title">Contact History</h3></div>
+            <div class="history-actions">
+              <button class="button button--primary" type="button" data-action="add-successful">Successful Contact</button>
+              <button class="button button--secondary" type="button" data-action="add-attempted">Attempted Contact</button>
+            </div>
+          </div>
+          ${history.length ? `<div class="history-list">${history.map(renderHistoryEntry).join("")}</div>` : `<article class="empty-state"><h3>No history yet</h3><p>Record a successful or attempted contact. Attempts remain visible but do not become Last Contact.</p></article>`}
+        </section>
+      </section>`;
+  }
+
   function renderContactCard(contact) {
     const details = [contact.address, contact.phone, contact.email].filter(Boolean);
+    const lastContact = deriveLastContact(contact);
     return `
       <article class="contact-card">
         <div class="contact-card__body">
           <h3>${escapeHtml(contact.name)}</h3>
+          <p class="contact-card__last">Last Contact: ${lastContact ? escapeHtml(formatDate(lastContact.date)) : "None recorded"}</p>
           ${details.length ? `<div class="contact-details">${details.map((detail) => `<p>${escapeHtml(detail)}</p>`).join("")}</div>` : `<p class="muted-text">No contact details added.</p>`}
           ${contact.generalNote ? `<p class="contact-note">${escapeHtml(contact.generalNote)}</p>` : ""}
         </div>
         <div class="contact-card__actions">
+          <button class="button button--primary" type="button" data-action="open-contact" data-contact-id="${escapeHtml(contact.id)}">Open</button>
           <button class="button button--secondary" type="button" data-action="edit-contact" data-contact-id="${escapeHtml(contact.id)}">Edit</button>
           <button class="button button--danger-subtle" type="button" data-action="delete-contact" data-contact-id="${escapeHtml(contact.id)}">Delete</button>
         </div>
@@ -226,13 +395,19 @@
           <article class="empty-state">
             <p class="section-label">Contacts</p>
             <h3>${contactCount === 0 ? "No contacts yet" : `${contactCount} ${contactCount === 1 ? "contact" : "contacts"} saved`}</h3>
-            <p>${contactCount === 0 ? "Add your first contact from the Contacts screen." : "Scheduling and interaction history will be added in the next development increments."}</p>
+            <p>${contactCount === 0 ? "Add your first contact from the Contacts screen." : "Contact history is available now. Scheduling begins in Increment 4."}</p>
             <button class="button button--primary button--spaced" type="button" data-action="open-contacts">${contactCount === 0 ? "Add a Contact" : "View Contacts"}</button>
           </article>
         </section>`;
     },
     contacts() {
       if (contactEditor) return renderContactForm();
+      if (activeContactId) {
+        const activeContact = appState.contacts.find((contact) => contact.id === activeContactId);
+        if (activeContact) return renderContactDetail(activeContact);
+        activeContactId = null;
+        interactionEditor = null;
+      }
       const contacts = sortedContacts();
       return `
         <section aria-labelledby="contacts-title">
@@ -240,7 +415,7 @@
             <div><h2 id="contacts-title">Contacts</h2><p>${contacts.length === 0 ? "Create the first permanent contact record." : `${contacts.length} ${contacts.length === 1 ? "person" : "people"}`}</p></div>
             <button class="button button--primary" type="button" data-action="new-contact">Add Contact</button>
           </header>
-          ${contacts.length === 0 ? `<article class="empty-state"><p class="section-label">Ready to begin</p><h3>No contacts yet</h3><p>Add a person’s permanent information here. Interaction history begins in Increment 3.</p></article>` : `<div class="contact-list">${contacts.map(renderContactCard).join("")}</div>`}
+          ${contacts.length === 0 ? `<article class="empty-state"><p class="section-label">Ready to begin</p><h3>No contacts yet</h3><p>Add a person’s permanent information here, then open their record to begin the continuous history.</p></article>` : `<div class="contact-list">${contacts.map(renderContactCard).join("")}</div>`}
         </section>`;
     },
     studies() {
@@ -272,6 +447,8 @@
     if (!VALID_SCREENS.has(screenName)) return;
     activeScreen = screenName;
     contactEditor = null;
+    activeContactId = null;
+    interactionEditor = null;
     renderActiveScreen();
     mainElement.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -312,12 +489,67 @@
     renderActiveScreen();
   }
 
+  function readInteractionForm(form) {
+    const formData = new FormData(form);
+    const type = formData.get("type") === "successfulContact" ? "successfulContact" : "attemptedContact";
+    return {
+      type,
+      date: textOrEmpty(formData.get("date")),
+      time: textOrEmpty(formData.get("time")),
+      discussionNotes: type === "successfulContact" ? textOrEmpty(formData.get("discussionNotes")).trim() : "",
+      scriptures: type === "successfulContact" ? textOrEmpty(formData.get("scriptures")).trim() : "",
+      literature: type === "successfulContact" ? textOrEmpty(formData.get("literature")).trim() : "",
+      note: type === "attemptedContact" ? textOrEmpty(formData.get("note")).trim() : ""
+    };
+  }
+
+  function saveInteraction(form) {
+    const contact = appState.contacts.find((item) => item.id === activeContactId);
+    if (!contact) return;
+    const values = readInteractionForm(form);
+    const dateInput = form.elements.date;
+    const dateError = form.querySelector("#date-error");
+    if (!values.date) {
+      dateInput.setAttribute("aria-invalid", "true");
+      dateError.hidden = false;
+      dateInput.focus();
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let nextHistory;
+    if (interactionEditor.entryId) {
+      nextHistory = contact.history.map((entry) => entry.id === interactionEditor.entryId ? { ...entry, ...values, updatedAt: now } : entry);
+    } else {
+      nextHistory = [...contact.history, { id: createId("history"), ...values, createdAt: now, updatedAt: now }];
+    }
+
+    const nextContacts = appState.contacts.map((item) => item.id === contact.id ? { ...item, history: nextHistory, updatedAt: now } : item);
+    appState = persistence.save({ ...appState, contacts: nextContacts });
+    interactionEditor = null;
+    renderActiveScreen();
+  }
+
+  function deleteInteraction(entryId) {
+    const contact = appState.contacts.find((item) => item.id === activeContactId);
+    const entry = contact?.history.find((item) => item.id === entryId);
+    if (!contact || !entry) return;
+    const confirmed = window.confirm(`Delete this ${isSuccessfulEntry(entry) ? "successful contact" : "attempted contact"} from ${formatDate(entry.date, entry.time)}?\n\nThis cannot be undone.`);
+    if (!confirmed) return;
+    const nextContacts = appState.contacts.map((item) => item.id === contact.id
+      ? { ...item, history: item.history.filter((historyEntry) => historyEntry.id !== entryId), updatedAt: new Date().toISOString() }
+      : item);
+    appState = persistence.save({ ...appState, contacts: nextContacts });
+    renderActiveScreen();
+  }
+
   function deleteContact(contactId) {
     const contact = appState.contacts.find((item) => item.id === contactId);
     if (!contact) return;
     const confirmed = window.confirm(`Delete ${contact.name}?\n\nThis permanently removes the entire contact record and cannot be undone.`);
     if (!confirmed) return;
     appState = persistence.save({ ...appState, contacts: appState.contacts.filter((item) => item.id !== contactId) });
+    if (activeContactId === contactId) activeContactId = null;
     renderActiveScreen();
   }
 
@@ -325,11 +557,13 @@
     const { action, contactId } = actionElement.dataset;
     if (action === "open-contacts") selectScreen("contacts");
     if (action === "new-contact") {
+      activeContactId = null;
       contactEditor = { contactId: null };
       renderActiveScreen();
       mainElement.querySelector("#contact-name")?.focus();
     }
     if (action === "edit-contact") {
+      activeContactId = contactId;
       contactEditor = { contactId };
       renderActiveScreen();
       mainElement.querySelector("#contact-name")?.focus();
@@ -338,6 +572,34 @@
       contactEditor = null;
       renderActiveScreen();
     }
+    if (action === "open-contact") {
+      activeContactId = contactId;
+      interactionEditor = null;
+      renderActiveScreen();
+    }
+    if (action === "back-to-contacts") {
+      activeContactId = null;
+      interactionEditor = null;
+      renderActiveScreen();
+    }
+    if (action === "add-successful" || action === "add-attempted") {
+      interactionEditor = { type: action === "add-successful" ? "successfulContact" : "attemptedContact", entryId: null };
+      renderActiveScreen();
+      mainElement.querySelector("#interaction-date")?.focus();
+    }
+    if (action === "edit-interaction") {
+      const contact = appState.contacts.find((item) => item.id === activeContactId);
+      const entry = contact?.history.find((item) => item.id === actionElement.dataset.entryId);
+      if (entry) {
+        interactionEditor = { type: entry.type, entryId: entry.id };
+        renderActiveScreen();
+      }
+    }
+    if (action === "cancel-interaction") {
+      interactionEditor = null;
+      renderActiveScreen();
+    }
+    if (action === "delete-interaction") deleteInteraction(actionElement.dataset.entryId);
     if (action === "delete-contact") deleteContact(contactId);
   }
 
@@ -351,14 +613,24 @@
       if (actionElement) handleAction(actionElement);
     });
     mainElement.addEventListener("submit", (event) => {
-      if (event.target.id !== "contact-form") return;
-      event.preventDefault();
-      saveContact(event.target);
+      if (event.target.id === "contact-form") {
+        event.preventDefault();
+        saveContact(event.target);
+      }
+      if (event.target.id === "interaction-form") {
+        event.preventDefault();
+        saveInteraction(event.target);
+      }
     });
     mainElement.addEventListener("input", (event) => {
       if (event.target.name === "name" && event.target.value.trim()) {
         event.target.removeAttribute("aria-invalid");
         const error = mainElement.querySelector("#name-error");
+        if (error) error.hidden = true;
+      }
+      if (event.target.name === "date" && event.target.value) {
+        event.target.removeAttribute("aria-invalid");
+        const error = mainElement.querySelector("#date-error");
         if (error) error.hidden = true;
       }
     });
