@@ -187,6 +187,83 @@ h3 { margin: 0; font-size: 1.05rem; }
   font-size: 0.9rem;
 }
 
+.follow-up-groups {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.follow-up-group__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.follow-up-group__heading span {
+  min-width: 2rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--primary-dark);
+  font-weight: 760;
+  padding: 0.18rem 0.55rem;
+  text-align: center;
+}
+
+.follow-up-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.follow-up-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--primary);
+  border-radius: 0.85rem;
+  background: var(--surface);
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.follow-up-item--overdue { border-left-color: #a13b35; }
+.follow-up-item--today { border-left-color: #b87822; }
+.follow-up-item--upcoming { border-left-color: var(--primary); }
+.follow-up-item__body { min-width: 0; }
+
+.follow-up-item__title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.follow-up-item__status {
+  margin: 0.3rem 0 0;
+  color: var(--text);
+  font-weight: 720;
+}
+
+.follow-up-item__date {
+  margin: 0.1rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.schedule-badge {
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--primary-dark);
+  font-size: 0.75rem;
+  font-weight: 760;
+  padding: 0.16rem 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .panel, .empty-state { padding: 1.2rem; }
 .panel + .panel, .panel + .empty-state, .empty-state + .panel { margin-top: 1rem; }
 .panel p, .empty-state p { margin: 0.45rem 0 0; color: var(--muted); }
@@ -531,6 +608,8 @@ h3 { margin: 0; font-size: 1.05rem; }
   .contact-card__actions { justify-content: stretch; }
   .contact-card__actions .button { flex: 1 1 7rem; }
   .form-actions .button { flex: 1 1 100%; }
+  .follow-up-item { grid-template-columns: 1fr; align-items: stretch; }
+  .follow-up-item > .button { width: 100%; }
   .detail-title-row,
   .history-section__heading,
   .history-entry__heading {

@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 4 — Scheduling Engine is implemented and awaiting user verification. Increment 3 is verified.
+Increment 5 — Needs Follow-Up is implemented and awaiting user verification. Increments 1–4 are verified.
 
-This increment is not yet the complete usable application. Needs Follow-Up grouping begins in Increment 5, and the first real-world trial begins only after the complete functional core has passed regression testing.
+This increment is not yet the complete usable application. Pause and Resume begin in Increment 6, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step after verification: Increment 5 — Needs Follow-Up ordering and status display.
+Next exact step after verification: Increment 6 — timed and indefinite Pause/Resume behavior.
 
 ## Governing principles
 
@@ -127,8 +127,25 @@ Status: verified.
 12. Reload or completely reopen the app and confirm all schedule settings and displayed dates remain unchanged.
 13. Confirm the scheduling fields remain readable without sideways scrolling on phone and tablet layouts.
 
+Status: verified.
+
+## Increment 5 verification
+
+1. Create or edit fictional contacts so at least two are overdue by different amounts, one is due today, and two are upcoming.
+2. Confirm Home orders the groups Overdue → Due Today → Upcoming.
+3. Confirm the older/more overdue contact appears first in Overdue.
+4. Confirm upcoming contacts appear in chronological order.
+5. Give a due-today or upcoming specific appointment a time and confirm the time is clearly displayed.
+6. Confirm a specific arrangement is visibly identified and overrides the person’s normal interval.
+7. Record an attempted contact for an overdue person and confirm they remain overdue in the same position.
+8. Record a successful contact using the normal interval and confirm the person moves to the appropriate future position.
+9. Open a person directly from a Home card and confirm the correct contact detail appears.
+10. Reload or completely reopen the app and confirm the groups, counts, and order remain correct.
+11. Confirm a contact without any schedule does not appear on Home but remains available under Contacts.
+12. Confirm the Home list has no sideways scrolling on phone and tablet layouts.
+
 ## Known limitations
 
-- Needs Follow-Up grouping is intentionally deferred to Increment 5.
+- Pause controls are intentionally deferred to Increment 6.
 - Backup and Restore are not active until Increment 10.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.

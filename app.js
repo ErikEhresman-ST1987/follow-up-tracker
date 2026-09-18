@@ -235,8 +235,79 @@
     return `${formatDate(schedule.date, schedule.time)}${suffix}`;
   }
 
-  function renderSummaryCard(label) {
-    return `<article class="summary-card"><span class="summary-card__value">0</span><span class="summary-card__label">${label}</span></article>`;
+  function renderSummaryCard(label, count) {
+    return `<article class="summary-card"><span class="summary-card__value">${count}</span><span class="summary-card__label">${label}</span></article>`;
+  }
+
+  function daysBetween(firstDate, secondDate) {
+    const first = new Date(`${firstDate}T12:00:00`);
+    const second = new Date(`${secondDate}T12:00:00`);
+    return Math.round((second - first) / 86400000);
+  }
+
+  function getFollowUpGroups() {
+    const today = todayDateValue();
+    const groups = { overdue: [], today: [], upcoming: [] };
+
+    appState.contacts.forEach((contact) => {
+      const schedule = deriveNextFollowUp(contact, today);
+      if (schedule.status !== "scheduled") return;
+      const item = { contact, schedule };
+      if (schedule.date < today) groups.overdue.push(item);
+      else if (schedule.date === today) groups.today.push(item);
+      else groups.upcoming.push(item);
+    });
+
+    const byDateTimeThenName = (a, b) => {
+      const firstKey = `${a.schedule.date}T${a.schedule.time || "99:99"}`;
+      const secondKey = `${b.schedule.date}T${b.schedule.time || "99:99"}`;
+      return firstKey.localeCompare(secondKey) || a.contact.name.localeCompare(b.contact.name, undefined, { sensitivity: "base" });
+    };
+
+    groups.overdue.sort(byDateTimeThenName);
+    groups.today.sort(byDateTimeThenName);
+    groups.upcoming.sort(byDateTimeThenName);
+    return groups;
+  }
+
+  function renderFollowUpItem(item, groupName) {
+    const { contact, schedule } = item;
+    const today = todayDateValue();
+    let statusText;
+    if (groupName === "overdue") {
+      const days = daysBetween(schedule.date, today);
+      statusText = `${days} ${days === 1 ? "day" : "days"} overdue`;
+    } else if (groupName === "today") {
+      statusText = schedule.time ? `Today at ${formatDate(schedule.date, schedule.time).split(" at ")[1]}` : "Due today";
+    } else {
+      const days = daysBetween(today, schedule.date);
+      statusText = `${days === 1 ? "Tomorrow" : `In ${days} days`}`;
+    }
+
+    return `
+      <article class="follow-up-item follow-up-item--${groupName}">
+        <div class="follow-up-item__body">
+          <div class="follow-up-item__title-row">
+            <h3>${escapeHtml(contact.name)}</h3>
+            ${schedule.source === "specific" ? `<span class="schedule-badge">Specific</span>` : ""}
+          </div>
+          <p class="follow-up-item__status">${escapeHtml(statusText)}</p>
+          <p class="follow-up-item__date">${escapeHtml(formatDate(schedule.date, schedule.time))}</p>
+        </div>
+        <button class="button button--secondary" type="button" data-action="open-home-contact" data-contact-id="${escapeHtml(contact.id)}">Open</button>
+      </article>`;
+  }
+
+  function renderFollowUpGroup(title, groupName, items) {
+    if (!items.length) return "";
+    return `
+      <section class="follow-up-group" aria-labelledby="${groupName}-title">
+        <div class="follow-up-group__heading">
+          <h3 id="${groupName}-title">${title}</h3>
+          <span>${items.length}</span>
+        </div>
+        <div class="follow-up-list">${items.map((item) => renderFollowUpItem(item, groupName)).join("")}</div>
+      </section>`;
   }
 
   function renderDeferredScreen(title, message) {
@@ -480,16 +551,24 @@
   const screenRenderers = {
     home() {
       const contactCount = appState.contacts.length;
+      const groups = getFollowUpGroups();
+      const scheduledCount = groups.overdue.length + groups.today.length + groups.upcoming.length;
       return `
         <section aria-labelledby="home-title">
-          <header class="screen-heading"><h2 id="home-title">Needs Follow-Up</h2><p>Scheduling begins in Increment 4. Contact records are available now.</p></header>
-          <div class="summary-grid" aria-label="Follow-up summary">${renderSummaryCard("Overdue")}${renderSummaryCard("Due today")}${renderSummaryCard("Upcoming")}</div>
-          <article class="empty-state">
-            <p class="section-label">Contacts</p>
-            <h3>${contactCount === 0 ? "No contacts yet" : `${contactCount} ${contactCount === 1 ? "contact" : "contacts"} saved`}</h3>
-            <p>${contactCount === 0 ? "Add your first contact from the Contacts screen." : "Contact history is available now. Scheduling begins in Increment 4."}</p>
-            <button class="button button--primary button--spaced" type="button" data-action="open-contacts">${contactCount === 0 ? "Add a Contact" : "View Contacts"}</button>
-          </article>
+          <header class="screen-heading"><h2 id="home-title">Needs Follow-Up</h2><p>Overdue contacts come first, followed by today’s contacts and upcoming plans.</p></header>
+          <div class="summary-grid" aria-label="Follow-up summary">${renderSummaryCard("Overdue", groups.overdue.length)}${renderSummaryCard("Due today", groups.today.length)}${renderSummaryCard("Upcoming", groups.upcoming.length)}</div>
+          ${scheduledCount ? `
+            <div class="follow-up-groups">
+              ${renderFollowUpGroup("Overdue", "overdue", groups.overdue)}
+              ${renderFollowUpGroup("Due Today", "today", groups.today)}
+              ${renderFollowUpGroup("Upcoming", "upcoming", groups.upcoming)}
+            </div>` : `
+            <article class="empty-state">
+              <p class="section-label">Nothing scheduled</p>
+              <h3>${contactCount === 0 ? "No contacts yet" : "No follow-ups need attention"}</h3>
+              <p>${contactCount === 0 ? "Add your first contact to begin." : "Contacts without a schedule remain available from the Contacts screen."}</p>
+              <button class="button button--primary button--spaced" type="button" data-action="open-contacts">${contactCount === 0 ? "Add a Contact" : "View Contacts"}</button>
+            </article>`}
         </section>`;
     },
     contacts() {
@@ -712,6 +791,15 @@
   function handleAction(actionElement) {
     const { action, contactId } = actionElement.dataset;
     if (action === "open-contacts") selectScreen("contacts");
+    if (action === "open-home-contact") {
+      activeScreen = "contacts";
+      activeContactId = contactId;
+      contactEditor = null;
+      interactionEditor = null;
+      renderActiveScreen();
+      mainElement.focus({ preventScroll: true });
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
     if (action === "new-contact") {
       activeContactId = null;
       contactEditor = { contactId: null };
