@@ -203,6 +203,38 @@
     return sortedHistory(contact).find(isSuccessfulEntry) || null;
   }
 
+  function addDays(dateValue, numberOfDays) {
+    const date = new Date(`${dateValue}T12:00:00`);
+    date.setDate(date.getDate() + numberOfDays);
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 10);
+  }
+
+  function deriveNextFollowUp(contact, comparisonDate = todayDateValue()) {
+    if (contact.pause.status === "indefinite") {
+      return { status: "paused", source: "pause", date: "", time: "" };
+    }
+    if (contact.pause.status === "untilDate" && contact.pause.untilDate > comparisonDate) {
+      return { status: "paused", source: "pause", date: contact.pause.untilDate, time: "" };
+    }
+    if (contact.followUp.specificDate) {
+      return { status: "scheduled", source: "specific", date: contact.followUp.specificDate, time: contact.followUp.specificTime };
+    }
+    const lastContact = deriveLastContact(contact);
+    if (lastContact && Number.isInteger(contact.followUp.normalIntervalDays) && contact.followUp.normalIntervalDays > 0) {
+      return { status: "scheduled", source: "normal", date: addDays(lastContact.date, contact.followUp.normalIntervalDays), time: "" };
+    }
+    return { status: "unscheduled", source: "none", date: "", time: "" };
+  }
+
+  function renderScheduleText(contact) {
+    const schedule = deriveNextFollowUp(contact);
+    if (schedule.status === "paused") return "Paused";
+    if (schedule.status === "unscheduled") return "Not scheduled";
+    const suffix = schedule.source === "specific" ? " · specific arrangement" : ` · ${contact.followUp.normalIntervalDays}-day interval`;
+    return `${formatDate(schedule.date, schedule.time)}${suffix}`;
+  }
+
   function renderSummaryCard(label) {
     return `<article class="summary-card"><span class="summary-card__value">0</span><span class="summary-card__label">${label}</span></article>`;
   }
@@ -215,6 +247,10 @@
   function renderContactForm() {
     const contact = contactEditor?.contactId ? appState.contacts.find((item) => item.id === contactEditor.contactId) : null;
     const isEditing = Boolean(contact);
+    const intervalDays = contact?.followUp.normalIntervalDays ?? null;
+    const commonIntervals = [7, 14, 21, 30];
+    const intervalSelection = intervalDays === null ? "none" : commonIntervals.includes(intervalDays) ? String(intervalDays) : "custom";
+    const customInterval = intervalSelection === "custom" ? intervalDays : "";
     return `
       <section aria-labelledby="contact-form-title">
         <header class="screen-heading screen-heading--actions">
@@ -239,6 +275,37 @@
             <label for="contact-email">Email</label>
             <input id="contact-email" name="email" type="email" maxlength="254" autocomplete="email" value="${escapeHtml(contact?.email || "")}">
           </div>
+          <fieldset class="field-group field--full">
+            <legend>Follow-Up Schedule</legend>
+            <p class="field-help">Set the person’s usual rhythm, or use a specific arrangement when needed.</p>
+            <div class="schedule-fields">
+              <div class="field">
+                <label for="normal-interval">Normal Interval</label>
+                <select id="normal-interval" name="intervalSelection">
+                  <option value="none" ${intervalSelection === "none" ? "selected" : ""}>Not set</option>
+                  <option value="7" ${intervalSelection === "7" ? "selected" : ""}>7 days</option>
+                  <option value="14" ${intervalSelection === "14" ? "selected" : ""}>14 days</option>
+                  <option value="21" ${intervalSelection === "21" ? "selected" : ""}>21 days</option>
+                  <option value="30" ${intervalSelection === "30" ? "selected" : ""}>30 days</option>
+                  <option value="custom" ${intervalSelection === "custom" ? "selected" : ""}>Custom</option>
+                </select>
+              </div>
+              <div class="field" data-custom-interval ${intervalSelection === "custom" ? "" : "hidden"}>
+                <label for="custom-interval">Custom Days</label>
+                <input id="custom-interval" name="customIntervalDays" type="number" min="1" max="3650" inputmode="numeric" value="${escapeHtml(customInterval)}">
+                <p class="field-error" id="interval-error" hidden>Enter a custom interval from 1 to 3650 days.</p>
+              </div>
+              <div class="field">
+                <label for="specific-date">Specific Next Date</label>
+                <input id="specific-date" name="specificDate" type="date" value="${escapeHtml(contact?.followUp.specificDate || "")}">
+              </div>
+              <div class="field">
+                <label for="specific-time">Specific Time</label>
+                <input id="specific-time" name="specificTime" type="time" value="${escapeHtml(contact?.followUp.specificTime || "")}">
+                <p class="field-error" id="specific-date-error" hidden>Choose a specific date before adding a time.</p>
+              </div>
+            </div>
+          </fieldset>
           <div class="field field--full">
             <label for="contact-note">General Note</label>
             <p class="field-help">Continuing information such as family, pets, interests, circumstances, or preferred contact method.</p>
@@ -298,6 +365,29 @@
               <label for="attempt-note">Brief Note</label>
               <textarea id="attempt-note" name="note" rows="4" maxlength="4000">${escapeHtml(existingEntry?.note || "")}</textarea>
             </div>`}
+          ${isSuccessful && !existingEntry ? `
+            <fieldset class="field-group field--full">
+              <legend>Next Follow-Up</legend>
+              <p class="field-help">A new successful contact satisfies the current follow-up. Choose what should happen next.</p>
+              <div class="field">
+                <label for="next-follow-up-mode">Next action</label>
+                <select id="next-follow-up-mode" name="nextFollowUpMode">
+                  <option value="normal">Use normal interval${contact.followUp.normalIntervalDays ? ` (${contact.followUp.normalIntervalDays} days)` : " (not set)"}</option>
+                  <option value="specific">Use a specific date and time</option>
+                </select>
+              </div>
+              <div class="schedule-fields" data-interaction-specific hidden>
+                <div class="field">
+                  <label for="next-specific-date">Specific Date <span aria-hidden="true">*</span></label>
+                  <input id="next-specific-date" name="nextSpecificDate" type="date">
+                  <p class="field-error" id="next-date-error" hidden>Please choose the specific next date.</p>
+                </div>
+                <div class="field">
+                  <label for="next-specific-time">Specific Time</label>
+                  <input id="next-specific-time" name="nextSpecificTime" type="time">
+                </div>
+              </div>
+            </fieldset>` : ""}
           <div class="form-actions field--full">
             <button class="button button--primary" type="submit">${existingEntry ? "Save Changes" : "Save Entry"}</button>
             <button class="button button--secondary" type="button" data-action="cancel-interaction">Cancel</button>
@@ -340,6 +430,7 @@
             <div>
               <h2 id="contact-detail-title">${escapeHtml(contact.name)}</h2>
               <p>Last Contact: ${lastContact ? escapeHtml(formatDate(lastContact.date, lastContact.time)) : "None recorded"}</p>
+              <p>Next Follow-Up: ${escapeHtml(renderScheduleText(contact))}</p>
             </div>
             <button class="button button--secondary" type="button" data-action="edit-contact" data-contact-id="${escapeHtml(contact.id)}">Edit Contact</button>
           </div>
@@ -374,6 +465,7 @@
         <div class="contact-card__body">
           <h3>${escapeHtml(contact.name)}</h3>
           <p class="contact-card__last">Last Contact: ${lastContact ? escapeHtml(formatDate(lastContact.date)) : "None recorded"}</p>
+          <p class="contact-card__last">Next Follow-Up: ${escapeHtml(renderScheduleText(contact))}</p>
           ${details.length ? `<div class="contact-details">${details.map((detail) => `<p>${escapeHtml(detail)}</p>`).join("")}</div>` : `<p class="muted-text">No contact details added.</p>`}
           ${contact.generalNote ? `<p class="contact-note">${escapeHtml(contact.generalNote)}</p>` : ""}
         </div>
@@ -456,12 +548,21 @@
 
   function readContactForm(form) {
     const formData = new FormData(form);
+    const intervalSelection = textOrEmpty(formData.get("intervalSelection"));
+    const customIntervalDays = Number.parseInt(textOrEmpty(formData.get("customIntervalDays")), 10);
+    const normalIntervalDays = intervalSelection === "custom"
+      ? customIntervalDays
+      : intervalSelection === "none" ? null : Number.parseInt(intervalSelection, 10);
     return {
       name: textOrEmpty(formData.get("name")).trim(),
       address: textOrEmpty(formData.get("address")).trim(),
       phone: textOrEmpty(formData.get("phone")).trim(),
       email: textOrEmpty(formData.get("email")).trim(),
-      generalNote: textOrEmpty(formData.get("generalNote")).trim()
+      generalNote: textOrEmpty(formData.get("generalNote")).trim(),
+      intervalSelection,
+      normalIntervalDays,
+      specificDate: textOrEmpty(formData.get("specificDate")),
+      specificTime: textOrEmpty(formData.get("specificTime"))
     };
   }
 
@@ -476,12 +577,46 @@
       return;
     }
 
+    if (values.intervalSelection === "custom" && (!Number.isInteger(values.normalIntervalDays) || values.normalIntervalDays < 1 || values.normalIntervalDays > 3650)) {
+      const customInput = form.elements.customIntervalDays;
+      customInput.setAttribute("aria-invalid", "true");
+      form.querySelector("#interval-error").hidden = false;
+      customInput.focus();
+      return;
+    }
+
+    if (values.specificTime && !values.specificDate) {
+      const specificDateInput = form.elements.specificDate;
+      specificDateInput.setAttribute("aria-invalid", "true");
+      form.querySelector("#specific-date-error").hidden = false;
+      specificDateInput.focus();
+      return;
+    }
+
     const now = new Date().toISOString();
     let nextContacts;
     if (contactEditor?.contactId) {
-      nextContacts = appState.contacts.map((contact) => contact.id === contactEditor.contactId ? { ...contact, ...values, updatedAt: now } : contact);
+      nextContacts = appState.contacts.map((contact) => contact.id === contactEditor.contactId ? {
+        ...contact,
+        name: values.name,
+        address: values.address,
+        phone: values.phone,
+        email: values.email,
+        generalNote: values.generalNote,
+        followUp: {
+          ...contact.followUp,
+          normalIntervalDays: values.normalIntervalDays,
+          specificDate: values.specificDate,
+          specificTime: values.specificDate ? values.specificTime : ""
+        },
+        updatedAt: now
+      } : contact);
     } else {
-      nextContacts = [...appState.contacts, createContact(values)];
+      const newContact = createContact(values);
+      newContact.followUp.normalIntervalDays = values.normalIntervalDays;
+      newContact.followUp.specificDate = values.specificDate;
+      newContact.followUp.specificTime = values.specificDate ? values.specificTime : "";
+      nextContacts = [...appState.contacts, newContact];
     }
 
     appState = persistence.save({ ...appState, contacts: nextContacts });
@@ -499,7 +634,10 @@
       discussionNotes: type === "successfulContact" ? textOrEmpty(formData.get("discussionNotes")).trim() : "",
       scriptures: type === "successfulContact" ? textOrEmpty(formData.get("scriptures")).trim() : "",
       literature: type === "successfulContact" ? textOrEmpty(formData.get("literature")).trim() : "",
-      note: type === "attemptedContact" ? textOrEmpty(formData.get("note")).trim() : ""
+      note: type === "attemptedContact" ? textOrEmpty(formData.get("note")).trim() : "",
+      nextFollowUpMode: textOrEmpty(formData.get("nextFollowUpMode")),
+      nextSpecificDate: textOrEmpty(formData.get("nextSpecificDate")),
+      nextSpecificTime: textOrEmpty(formData.get("nextSpecificTime"))
     };
   }
 
@@ -516,6 +654,14 @@
       return;
     }
 
+    if (!interactionEditor.entryId && values.type === "successfulContact" && values.nextFollowUpMode === "specific" && !values.nextSpecificDate) {
+      const nextDateInput = form.elements.nextSpecificDate;
+      nextDateInput.setAttribute("aria-invalid", "true");
+      form.querySelector("#next-date-error").hidden = false;
+      nextDateInput.focus();
+      return;
+    }
+
     const now = new Date().toISOString();
     let nextHistory;
     if (interactionEditor.entryId) {
@@ -524,7 +670,17 @@
       nextHistory = [...contact.history, { id: createId("history"), ...values, createdAt: now, updatedAt: now }];
     }
 
-    const nextContacts = appState.contacts.map((item) => item.id === contact.id ? { ...item, history: nextHistory, updatedAt: now } : item);
+    const shouldApplyNextDecision = !interactionEditor.entryId && values.type === "successfulContact";
+    const nextContacts = appState.contacts.map((item) => item.id === contact.id ? {
+      ...item,
+      history: nextHistory,
+      followUp: shouldApplyNextDecision ? {
+        ...item.followUp,
+        specificDate: values.nextFollowUpMode === "specific" ? values.nextSpecificDate : "",
+        specificTime: values.nextFollowUpMode === "specific" ? values.nextSpecificTime : ""
+      } : item.followUp,
+      updatedAt: now
+    } : item);
     appState = persistence.save({ ...appState, contacts: nextContacts });
     interactionEditor = null;
     renderActiveScreen();
@@ -632,6 +788,31 @@
         event.target.removeAttribute("aria-invalid");
         const error = mainElement.querySelector("#date-error");
         if (error) error.hidden = true;
+      }
+      if (event.target.name === "customIntervalDays" && event.target.value) {
+        event.target.removeAttribute("aria-invalid");
+        const error = mainElement.querySelector("#interval-error");
+        if (error) error.hidden = true;
+      }
+      if (event.target.name === "specificDate" && event.target.value) {
+        event.target.removeAttribute("aria-invalid");
+        const error = mainElement.querySelector("#specific-date-error");
+        if (error) error.hidden = true;
+      }
+      if (event.target.name === "nextSpecificDate" && event.target.value) {
+        event.target.removeAttribute("aria-invalid");
+        const error = mainElement.querySelector("#next-date-error");
+        if (error) error.hidden = true;
+      }
+    });
+    mainElement.addEventListener("change", (event) => {
+      if (event.target.name === "intervalSelection") {
+        const customFields = mainElement.querySelector("[data-custom-interval]");
+        if (customFields) customFields.hidden = event.target.value !== "custom";
+      }
+      if (event.target.name === "nextFollowUpMode") {
+        const specificFields = mainElement.querySelector("[data-interaction-specific]");
+        if (specificFields) specificFields.hidden = event.target.value !== "specific";
       }
     });
   }

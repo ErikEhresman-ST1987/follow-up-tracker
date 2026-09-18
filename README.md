@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 3 — Contact History is implemented and awaiting user verification.
+Increment 4 — Scheduling Engine is implemented and awaiting user verification. Increment 3 is verified.
 
-This increment is not yet the complete usable application. Follow-up scheduling begins in Increment 4, and the first real-world trial begins only after the complete functional core has passed regression testing.
+This increment is not yet the complete usable application. Needs Follow-Up grouping begins in Increment 5, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step after verification: Increment 4 — follow-up intervals, specific dates/times, and the scheduling engine.
+Next exact step after verification: Increment 5 — Needs Follow-Up ordering and status display.
 
 ## Governing principles
 
@@ -109,8 +109,26 @@ When an application-shell file changes, update `CACHE_NAME` in `service-worker.j
 11. Add two successful contacts on different dates and confirm Last Contact derives from the newer successful date.
 12. Confirm the contact detail, entry forms, and history remain readable without sideways scrolling on phone and tablet layouts.
 
+Status: verified.
+
+## Increment 4 verification
+
+1. Edit a fictional contact and set a 14-day Normal Interval with no specific date.
+2. Confirm Next Follow-Up is derived as 14 days after the most recent successful contact.
+3. Change the interval to 7, 21, and 30 days and confirm each recalculates correctly.
+4. Choose Custom, enter a valid number such as 10, and confirm the calculated date.
+5. Try an empty, zero, or excessive custom interval and confirm it is rejected without clearing the form.
+6. Set a Specific Next Date and optional time; confirm it overrides the normal interval while leaving the normal interval unchanged.
+7. Try entering a specific time without a specific date; confirm the form requires a date.
+8. Record an attempted contact and confirm neither the specific arrangement nor the normal calculation changes.
+9. Record a successful contact and choose Use normal interval; confirm the old specific arrangement clears and the normal interval resumes from the new successful date.
+10. Record another successful contact and choose a new specific date/time; confirm the new specific arrangement takes precedence.
+11. Edit the newest successful contact’s date while using a normal interval and confirm the derived next date moves with it.
+12. Reload or completely reopen the app and confirm all schedule settings and displayed dates remain unchanged.
+13. Confirm the scheduling fields remain readable without sideways scrolling on phone and tablet layouts.
+
 ## Known limitations
 
-- Follow-up scheduling is intentionally not implemented yet.
+- Needs Follow-Up grouping is intentionally deferred to Increment 5.
 - Backup and Restore are not active until Increment 10.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.

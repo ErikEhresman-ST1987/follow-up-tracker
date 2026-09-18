@@ -37,7 +37,8 @@ button, input, textarea, select { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   min-height: 3rem;
   border: 1px solid #9aaca7;
@@ -54,7 +55,8 @@ textarea {
 }
 
 input:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+select:focus-visible {
   border-color: var(--primary);
   outline: 3px solid rgb(37 95 87 / 22%);
   outline-offset: 1px;
@@ -270,6 +272,26 @@ h3 { margin: 0; font-size: 1.05rem; }
 
 .field { min-width: 0; }
 .field--full { grid-column: 1 / -1; }
+
+.field-group {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 1rem;
+}
+
+.field-group legend {
+  padding: 0 0.35rem;
+  color: var(--primary-dark);
+  font-weight: 760;
+}
+
+.schedule-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
 
 .field label {
   display: block;
@@ -504,6 +526,7 @@ h3 { margin: 0; font-size: 1.05rem; }
   .screen-heading--actions { align-items: stretch; flex-direction: column; }
   .screen-heading--actions > .button { width: 100%; }
   .contact-form { grid-template-columns: 1fr; padding: 1rem; }
+  .schedule-fields { grid-template-columns: 1fr; }
   .contact-card { grid-template-columns: 1fr; }
   .contact-card__actions { justify-content: stretch; }
   .contact-card__actions .button { flex: 1 1 7rem; }
