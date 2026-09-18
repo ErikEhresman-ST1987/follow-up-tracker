@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 2 — Contact Management is implemented and awaiting user verification.
+Increment 2 — Contact Management is implemented, activated, and verified.
 
 This increment is not yet the complete usable application. Contact history begins in Increment 3, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step after verification: Increment 3 — successful and attempted interaction history.
+Next exact step: Increment 3 — successful and attempted interaction history.
 
 ## Governing principles
 
