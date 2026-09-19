@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 7 — Finding and Contact Actions is implemented and awaiting user verification. Increments 1–6 are verified.
+Increment 8 — Bible Studies is implemented and awaiting user verification. Increments 1–7 are verified.
 
-This increment is not yet the complete usable application. Bible-study progression begins in Increment 8, and the first real-world trial begins only after the complete functional core has passed regression testing.
+This increment is not yet the complete usable application. Monthly reporting begins in Increment 9, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step after Increment 7 verification: Increment 8 — Bible-study lifecycle, scheduling, and conducted/missed study history.
+Next exact step after Increment 8 verification: Increment 9 — history-derived monthly reporting.
 
 ## Governing principles
 
@@ -181,10 +181,31 @@ Status: verified.
 13. Confirm the search field, alphabetical headings, cards, and contact-action controls have no sideways scrolling on phone and tablet layouts.
 14. After loading the update online, launch the installed app offline and confirm alphabetical browsing and search still work. External call/email/maps handoffs may require the corresponding device service.
 
+Status: verified.
+
+## Increment 8 verification
+
+1. Open a fictional Follow-Up contact with existing history and choose Establish Bible Study.
+2. Add a normal study day/time, location, publication, and progress; confirm the same contact ID, permanent information, General Note, and earlier history remain intact.
+3. Confirm the person appears in Bible Studies and is clearly marked as a Bible Study in Contacts and Home.
+4. Confirm the normal recurring study appears on Home on the correct next weekday and displays its time.
+5. Edit the study and add a specific upcoming date/time; confirm it overrides the normal schedule without replacing the saved normal day/time.
+6. Record a Conducted Study with notes, scriptures, and updated progress; confirm it enters the continuous history, becomes Last Contact, updates current progress, and schedules the next study according to the selected decision.
+7. Record a Missed/Attempted Study; confirm it enters history but does not replace Last Contact or count as a successful interaction.
+8. For both conducted and missed entries, choose a specific next study and confirm the one-time date/time takes precedence.
+9. Edit both study history types and confirm corrections persist after reload.
+10. Delete a study history entry, first canceling and then confirming; verify only that entry is removed and derived dates update appropriately.
+11. Pause an active study; confirm it disappears from Home but remains visible in Bible Studies and Paused Contacts. Resume it and confirm its schedule returns.
+12. End a Bible Study, choose an ordinary follow-up interval or specific date/time, and confirm it leaves Bible Studies while keeping all earlier study and follow-up history.
+13. Confirm the returned Follow-Up appears in the appropriate Home group and can later be established as a Bible Study again without duplication.
+14. Reload or completely reopen the app and confirm lifecycle state, study details, schedules, progress, pause state, and history remain unchanged.
+15. Confirm Bible Study lists, forms, detail panels, history, and controls have no sideways scrolling on phone and tablet layouts.
+16. After loading the update online, launch the installed app offline and confirm the complete Bible-study workflow remains available.
+
 Status: awaiting user verification.
 
 ## Known limitations
 
-- Bible-study lifecycle and scheduling are intentionally deferred to Increment 8.
+- Monthly reporting is intentionally deferred to Increment 9.
 - Backup and Restore are not active until Increment 10.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.

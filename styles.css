@@ -62,7 +62,8 @@ select:focus-visible {
   outline-offset: 1px;
 }
 
-input[aria-invalid="true"] {
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
   border-color: #a22929;
   outline-color: rgb(162 41 41 / 20%);
 }

@@ -13,6 +13,7 @@
   let pauseEditor = false;
   let showPausedOnly = false;
   let contactSearchQuery = "";
+  let studyLifecycleEditor = null;
 
   const mainElement = document.querySelector("#main-content");
   const saveStatusElement = document.querySelector("#save-status");
@@ -76,6 +77,7 @@
       scriptures: textOrEmpty(candidate.scriptures),
       literature: textOrEmpty(candidate.literature),
       note: textOrEmpty(candidate.note),
+      studyProgress: textOrEmpty(candidate.studyProgress),
       createdAt: textOrEmpty(candidate.createdAt),
       updatedAt: textOrEmpty(candidate.updatedAt)
     };
@@ -249,12 +251,36 @@
     return localDate.toISOString().slice(0, 10);
   }
 
+  function nextWeekdayDate(dayValue, comparisonDate, afterDate = "") {
+    const targetDay = Number.parseInt(dayValue, 10);
+    if (!Number.isInteger(targetDay) || targetDay < 0 || targetDay > 6) return "";
+    let candidate = comparisonDate;
+    const date = new Date(`${candidate}T12:00:00`);
+    const offset = (targetDay - date.getDay() + 7) % 7;
+    candidate = addDays(candidate, offset);
+    while (afterDate && candidate <= afterDate) candidate = addDays(candidate, 7);
+    return candidate;
+  }
+
+  function latestStudyEntry(contact) {
+    return sortedHistory(contact).find((entry) => entry.type === "conductedStudy" || entry.type === "missedStudy") || null;
+  }
+
   function deriveNextFollowUp(contact, comparisonDate = todayDateValue()) {
     if (contact.pause.status === "indefinite") {
       return { status: "paused", source: "pause", date: "", time: "" };
     }
     if (contact.pause.status === "untilDate" && contact.pause.untilDate > comparisonDate) {
       return { status: "paused", source: "pause", date: contact.pause.untilDate, time: "" };
+    }
+    if (contact.relationshipType === "bibleStudy" && contact.bibleStudy.isActive) {
+      if (contact.bibleStudy.specificDate) {
+        return { status: "scheduled", source: "studySpecific", date: contact.bibleStudy.specificDate, time: contact.bibleStudy.specificTime };
+      }
+      const latestStudy = latestStudyEntry(contact);
+      const nextDate = nextWeekdayDate(contact.bibleStudy.normalDay, comparisonDate, latestStudy?.date || "");
+      if (nextDate) return { status: "scheduled", source: "studyRecurring", date: nextDate, time: contact.bibleStudy.normalTime };
+      return { status: "unscheduled", source: "none", date: "", time: "" };
     }
     if (contact.followUp.specificDate) {
       return { status: "scheduled", source: "specific", date: contact.followUp.specificDate, time: contact.followUp.specificTime };
@@ -270,7 +296,10 @@
     const schedule = deriveNextFollowUp(contact);
     if (schedule.status === "paused") return "Paused";
     if (schedule.status === "unscheduled") return "Not scheduled";
-    const suffix = schedule.source === "specific" ? " · specific arrangement" : ` · ${contact.followUp.normalIntervalDays}-day interval`;
+    let suffix;
+    if (schedule.source === "specific" || schedule.source === "studySpecific") suffix = " · specific arrangement";
+    else if (schedule.source === "studyRecurring") suffix = " · normal study schedule";
+    else suffix = ` · ${contact.followUp.normalIntervalDays}-day interval`;
     return `${formatDate(schedule.date, schedule.time)}${suffix}`;
   }
 
@@ -328,7 +357,8 @@
         <div class="follow-up-item__body">
           <div class="follow-up-item__title-row">
             <h3>${escapeHtml(contact.name)}</h3>
-            ${schedule.source === "specific" ? `<span class="schedule-badge">Specific</span>` : ""}
+            ${contact.relationshipType === "bibleStudy" ? `<span class="schedule-badge">Bible Study</span>` : ""}
+            ${schedule.source === "specific" || schedule.source === "studySpecific" ? `<span class="schedule-badge">Specific</span>` : ""}
           </div>
           <p class="follow-up-item__status">${escapeHtml(statusText)}</p>
           <p class="follow-up-item__date">${escapeHtml(formatDate(schedule.date, schedule.time))}</p>
@@ -434,6 +464,7 @@
       ? contact.history.find((entry) => entry.id === interactionEditor.entryId)
       : null;
     const type = existingEntry?.type || interactionEditor.type;
+    if (type === "conductedStudy" || type === "missedStudy") return renderStudyInteractionForm(contact, existingEntry, type);
     const isSuccessful = type === "successfulContact";
     const date = existingEntry?.date || todayDateValue();
 
@@ -506,17 +537,78 @@
       </section>`;
   }
 
+  function dayOptions(selectedDay = "") {
+    return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+      .map((label, index) => `<option value="${index}" ${String(index) === selectedDay ? "selected" : ""}>${label}</option>`)
+      .join("");
+  }
+
+  function renderStudyLifecycleForm(contact) {
+    const isEnding = studyLifecycleEditor === "end";
+    const isEditingStudy = contact.relationshipType === "bibleStudy" && contact.bibleStudy.isActive;
+    if (isEnding) {
+      const intervalDays = contact.followUp.normalIntervalDays;
+      const commonIntervals = [7, 14, 21, 30];
+      const intervalSelection = intervalDays === null ? "none" : commonIntervals.includes(intervalDays) ? String(intervalDays) : "custom";
+      return `
+        <section aria-labelledby="study-lifecycle-title">
+          <header class="screen-heading screen-heading--actions"><div><p class="section-label">Bible Study → Follow-Up</p><h2 id="study-lifecycle-title">End Bible Study</h2><p>${escapeHtml(contact.name)}</p></div><button class="button button--secondary" type="button" data-action="cancel-study-lifecycle">Cancel</button></header>
+          <form id="end-study-form" class="contact-form" novalidate>
+            <p class="field-help field--full">The complete history remains. The recurring study schedule will be deactivated, and ordinary follow-up scheduling will resume.</p>
+            <div class="field"><label for="end-interval">Normal Follow-Up Interval</label><select id="end-interval" name="intervalSelection"><option value="none" ${intervalSelection === "none" ? "selected" : ""}>Not set</option><option value="7" ${intervalSelection === "7" ? "selected" : ""}>7 days</option><option value="14" ${intervalSelection === "14" ? "selected" : ""}>14 days</option><option value="21" ${intervalSelection === "21" ? "selected" : ""}>21 days</option><option value="30" ${intervalSelection === "30" ? "selected" : ""}>30 days</option><option value="custom" ${intervalSelection === "custom" ? "selected" : ""}>Custom</option></select></div>
+            <div class="field" data-custom-interval ${intervalSelection === "custom" ? "" : "hidden"}><label for="end-custom-interval">Custom Days</label><input id="end-custom-interval" name="customIntervalDays" type="number" min="1" max="3650" inputmode="numeric" value="${intervalSelection === "custom" ? intervalDays : ""}"><p class="field-error" id="interval-error" hidden>Enter a custom interval from 1 to 3650 days.</p></div>
+            <div class="field"><label for="end-specific-date">Specific Next Date</label><input id="end-specific-date" name="specificDate" type="date"></div>
+            <div class="field"><label for="end-specific-time">Specific Time</label><input id="end-specific-time" name="specificTime" type="time"><p class="field-error" id="specific-date-error" hidden>Choose a specific date before adding a time.</p></div>
+            <div class="form-actions field--full"><button class="button button--primary" type="submit">Return to Follow-Up</button><button class="button button--secondary" type="button" data-action="cancel-study-lifecycle">Cancel</button></div>
+          </form>
+        </section>`;
+    }
+
+    return `
+      <section aria-labelledby="study-lifecycle-title">
+        <header class="screen-heading screen-heading--actions"><div><p class="section-label">${isEditingStudy ? "Bible Study Settings" : "Follow-Up → Bible Study"}</p><h2 id="study-lifecycle-title">${isEditingStudy ? "Edit Bible Study" : "Establish Bible Study"}</h2><p>${escapeHtml(contact.name)}</p></div><button class="button button--secondary" type="button" data-action="cancel-study-lifecycle">Cancel</button></header>
+        <form id="start-study-form" class="contact-form" novalidate>
+          <p class="field-help field--full">This keeps the same contact record and complete earlier history.</p>
+          <div class="field"><label for="study-normal-day">Normal Study Day</label><select id="study-normal-day" name="normalDay"><option value="">Not set</option>${dayOptions(contact.bibleStudy.normalDay)}</select></div>
+          <div class="field"><label for="study-normal-time">Normal Study Time</label><input id="study-normal-time" name="normalTime" type="time" value="${escapeHtml(contact.bibleStudy.normalTime)}"><p class="field-error" id="study-day-error" hidden>Choose a normal study day before adding a time.</p></div>
+          <div class="field field--full"><label for="study-location">Location</label><input id="study-location" name="location" type="text" maxlength="500" value="${escapeHtml(contact.bibleStudy.location)}"></div>
+          <div class="field"><label for="study-publication">Publication</label><input id="study-publication" name="publication" type="text" maxlength="500" value="${escapeHtml(contact.bibleStudy.publication)}"></div>
+          <div class="field"><label for="study-progress">Current Progress</label><input id="study-progress" name="progress" type="text" maxlength="500" value="${escapeHtml(contact.bibleStudy.progress)}"></div>
+          <fieldset class="field-group field--full"><legend>Particular Upcoming Study</legend><p class="field-help">Optional. This overrides the normal study schedule once without replacing it.</p><div class="schedule-fields"><div class="field"><label for="study-specific-date">Specific Date</label><input id="study-specific-date" name="specificDate" type="date" value="${escapeHtml(contact.bibleStudy.specificDate)}"></div><div class="field"><label for="study-specific-time">Specific Time</label><input id="study-specific-time" name="specificTime" type="time" value="${escapeHtml(contact.bibleStudy.specificTime)}"><p class="field-error" id="study-specific-date-error" hidden>Choose a specific date before adding a time.</p></div></div></fieldset>
+          <div class="form-actions field--full"><button class="button button--primary" type="submit">${isEditingStudy ? "Save Study" : "Establish Bible Study"}</button><button class="button button--secondary" type="button" data-action="cancel-study-lifecycle">Cancel</button></div>
+        </form>
+      </section>`;
+  }
+
+  function renderStudyInteractionForm(contact, existingEntry, type) {
+    const conducted = type === "conductedStudy";
+    const date = existingEntry?.date || todayDateValue();
+    return `
+      <section aria-labelledby="interaction-form-title">
+        <header class="screen-heading screen-heading--actions"><div><p class="section-label">${existingEntry ? "Edit history" : "New study history"}</p><h2 id="interaction-form-title">${conducted ? "Conducted Study" : "Missed/Attempted Study"}</h2><p>${escapeHtml(contact.name)}</p></div><button class="button button--secondary" type="button" data-action="cancel-interaction">Cancel</button></header>
+        <form id="interaction-form" class="contact-form" novalidate>
+          <input type="hidden" name="type" value="${type}">
+          <div class="field"><label for="interaction-date">Date <span aria-hidden="true">*</span></label><input id="interaction-date" name="date" type="date" required value="${escapeHtml(date)}"><p class="field-error" id="date-error" hidden>Please enter a date.</p></div>
+          <div class="field"><label for="interaction-time">Time</label><input id="interaction-time" name="time" type="time" value="${escapeHtml(existingEntry?.time || "")}"></div>
+          ${conducted ? `<div class="field field--full"><label for="discussion-notes">Discussion Notes</label><textarea id="discussion-notes" name="discussionNotes" rows="5" maxlength="10000">${escapeHtml(existingEntry?.discussionNotes || "")}</textarea></div><div class="field"><label for="scriptures">Scripture(s)</label><textarea id="scriptures" name="scriptures" rows="3" maxlength="2000">${escapeHtml(existingEntry?.scriptures || "")}</textarea></div><div class="field"><label for="study-entry-progress">Progress After Study</label><input id="study-entry-progress" name="studyProgress" type="text" maxlength="500" value="${escapeHtml(existingEntry ? existingEntry.studyProgress : contact.bibleStudy.progress)}"></div>` : `<div class="field field--full"><label for="attempt-note">Brief Note</label><textarea id="attempt-note" name="note" rows="4" maxlength="4000">${escapeHtml(existingEntry?.note || "")}</textarea></div>`}
+          ${!existingEntry ? `<fieldset class="field-group field--full"><legend>Next Study</legend><p class="field-help">Use the normal weekly schedule, or make a one-time change.</p><div class="field"><label for="next-study-mode">Next action</label><select id="next-study-mode" name="nextStudyMode"><option value="normal">Use normal study schedule</option><option value="specific">Use a specific date and time</option></select></div><div class="schedule-fields" data-study-specific hidden><div class="field"><label for="next-study-date">Specific Date <span aria-hidden="true">*</span></label><input id="next-study-date" name="nextStudyDate" type="date"><p class="field-error" id="next-study-date-error" hidden>Please choose the specific next date.</p></div><div class="field"><label for="next-study-time">Specific Time</label><input id="next-study-time" name="nextStudyTime" type="time"></div></div></fieldset>` : ""}
+          <div class="form-actions field--full"><button class="button button--primary" type="submit">${existingEntry ? "Save Changes" : "Save Entry"}</button><button class="button button--secondary" type="button" data-action="cancel-interaction">Cancel</button></div>
+        </form>
+      </section>`;
+  }
+
   function renderHistoryEntry(entry) {
     const isSuccessful = isSuccessfulEntry(entry);
+    const labels = { successfulContact: "Successful Contact", attemptedContact: "Attempted Contact", conductedStudy: "Conducted Bible Study", missedStudy: "Missed/Attempted Study" };
     const content = isSuccessful
-      ? [entry.discussionNotes, entry.scriptures ? `Scripture(s): ${entry.scriptures}` : "", entry.literature ? `Literature: ${entry.literature}` : ""].filter(Boolean)
+      ? [entry.discussionNotes, entry.scriptures ? `Scripture(s): ${entry.scriptures}` : "", entry.literature ? `Literature: ${entry.literature}` : "", entry.studyProgress ? `Study progress: ${entry.studyProgress}` : ""].filter(Boolean)
       : [entry.note].filter(Boolean);
 
     return `
       <article class="history-entry history-entry--${isSuccessful ? "successful" : "attempted"}">
         <div class="history-entry__heading">
           <div>
-            <p class="history-entry__type">${isSuccessful ? "Successful Contact" : "Attempted Contact"}</p>
+            <p class="history-entry__type">${labels[entry.type] || "Interaction"}</p>
             <p class="history-entry__date">${escapeHtml(formatDate(entry.date, entry.time))}</p>
           </div>
           <div class="history-entry__actions">
@@ -575,22 +667,26 @@
   function renderContactDetail(contact) {
     if (interactionEditor) return renderInteractionForm(contact);
     if (pauseEditor) return renderPauseForm(contact);
+    if (studyLifecycleEditor) return renderStudyLifecycleForm(contact);
     const history = sortedHistory(contact);
     const lastContact = deriveLastContact(contact);
     const isPaused = isActivelyPaused(contact);
+    const isStudy = contact.relationshipType === "bibleStudy" && contact.bibleStudy.isActive;
     return `
       <section aria-labelledby="contact-detail-title">
         <header class="screen-heading">
-          <button class="back-button" type="button" data-action="back-to-contacts">← All Contacts</button>
+          <button class="back-button" type="button" data-action="back-to-list">← ${activeScreen === "studies" ? "Bible Studies" : "All Contacts"}</button>
           <div class="detail-title-row">
             <div>
-              <h2 id="contact-detail-title">${escapeHtml(contact.name)}</h2>
+              <div class="follow-up-item__title-row"><h2 id="contact-detail-title">${escapeHtml(contact.name)}</h2>${isStudy ? `<span class="schedule-badge">Bible Study</span>` : ""}</div>
               <p>Last Contact: ${lastContact ? escapeHtml(formatDate(lastContact.date, lastContact.time)) : "None recorded"}</p>
-              <p>Next Follow-Up: ${escapeHtml(renderScheduleText(contact))}</p>
+              <p>${isStudy ? "Next Study" : "Next Follow-Up"}: ${escapeHtml(renderScheduleText(contact))}</p>
             </div>
             <div class="detail-actions">
               <button class="button ${isPaused ? "button--primary" : "button--secondary"}" type="button" data-action="${isPaused ? "resume-contact" : "pause-contact"}" data-contact-id="${escapeHtml(contact.id)}">${isPaused ? "Resume" : "Pause"}</button>
               <button class="button button--secondary" type="button" data-action="edit-contact" data-contact-id="${escapeHtml(contact.id)}">Edit Contact</button>
+              ${isStudy ? `<button class="button button--secondary" type="button" data-action="edit-study" data-contact-id="${escapeHtml(contact.id)}">Edit Study</button>` : ""}
+              <button class="button button--secondary" type="button" data-action="${isStudy ? "end-study" : "start-study"}" data-contact-id="${escapeHtml(contact.id)}">${isStudy ? "End Bible Study" : "Establish Bible Study"}</button>
             </div>
           </div>
         </header>
@@ -605,15 +701,17 @@
           ${![contact.address, contact.phone, contact.email, contact.generalNote].some(Boolean) ? `<p class="muted-text">No additional contact information.</p>` : ""}
         </article>
 
+        ${isStudy ? `<article class="panel contact-profile study-profile"><div><span>Normal Schedule</span><p>${contact.bibleStudy.normalDay !== "" ? `${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][Number(contact.bibleStudy.normalDay)]}${contact.bibleStudy.normalTime ? ` at ${formatDate(todayDateValue(), contact.bibleStudy.normalTime).split(" at ")[1]}` : ""}` : "Not set"}</p></div><div><span>Location</span><p>${escapeHtml(contact.bibleStudy.location || "Not set")}</p></div><div><span>Publication</span><p>${escapeHtml(contact.bibleStudy.publication || "Not set")}</p></div><div><span>Current Progress</span><p>${escapeHtml(contact.bibleStudy.progress || "Not set")}</p></div></article>` : ""}
+
         <section class="history-section" aria-labelledby="history-title">
           <div class="history-section__heading">
             <div><p class="section-label">Continuous history</p><h3 id="history-title">Contact History</h3></div>
             <div class="history-actions">
-              <button class="button button--primary" type="button" data-action="add-successful">Successful Contact</button>
-              <button class="button button--secondary" type="button" data-action="add-attempted">Attempted Contact</button>
+              <button class="button button--primary" type="button" data-action="${isStudy ? "add-conducted-study" : "add-successful"}">${isStudy ? "Conducted Study" : "Successful Contact"}</button>
+              <button class="button button--secondary" type="button" data-action="${isStudy ? "add-missed-study" : "add-attempted"}">${isStudy ? "Missed/Attempted" : "Attempted Contact"}</button>
             </div>
           </div>
-          ${history.length ? `<div class="history-list">${history.map(renderHistoryEntry).join("")}</div>` : `<article class="empty-state"><h3>No history yet</h3><p>Record a successful or attempted contact. Attempts remain visible but do not become Last Contact.</p></article>`}
+          ${history.length ? `<div class="history-list">${history.map(renderHistoryEntry).join("")}</div>` : `<article class="empty-state"><h3>No history yet</h3><p>Record a successful or attempted interaction. Attempts remain visible but do not become Last Contact.</p></article>`}
         </section>
       </section>`;
   }
@@ -625,9 +723,9 @@
     return `
       <article class="contact-card">
         <div class="contact-card__body">
-          <div class="follow-up-item__title-row"><h3>${escapeHtml(contact.name)}</h3>${isPaused ? `<span class="pause-badge">Paused</span>` : ""}</div>
+          <div class="follow-up-item__title-row"><h3>${escapeHtml(contact.name)}</h3>${contact.relationshipType === "bibleStudy" ? `<span class="schedule-badge">Bible Study</span>` : ""}${isPaused ? `<span class="pause-badge">Paused</span>` : ""}</div>
           <p class="contact-card__last">Last Contact: ${lastContact ? escapeHtml(formatDate(lastContact.date)) : "None recorded"}</p>
-          <p class="contact-card__last">${isPaused ? escapeHtml(renderPauseText(contact)) : `Next Follow-Up: ${escapeHtml(renderScheduleText(contact))}`}</p>
+          <p class="contact-card__last">${isPaused ? escapeHtml(renderPauseText(contact)) : `${contact.relationshipType === "bibleStudy" ? "Next Study" : "Next Follow-Up"}: ${escapeHtml(renderScheduleText(contact))}`}</p>
           ${isPaused && contact.pause.reason ? `<p class="pause-reason">${escapeHtml(contact.pause.reason)}</p>` : ""}
           ${details.length ? `<div class="contact-details">${details.map((detail) => `<p>${escapeHtml(detail)}</p>`).join("")}</div>` : `<p class="muted-text">No contact details added.</p>`}
           ${contact.generalNote ? `<p class="contact-note">${escapeHtml(contact.generalNote)}</p>` : ""}
@@ -666,6 +764,11 @@
         ? `<div class="contact-list">${renderAlphabeticalContacts(contacts)}</div>`
         : `<article class="empty-state"><p class="section-label">${query ? "Search" : showPausedOnly ? "Paused contacts" : "Ready to begin"}</p><h3>${emptyTitle}</h3><p>${emptyText}</p></article>`
     };
+  }
+
+  function renderStudyCard(contact) {
+    const paused = isActivelyPaused(contact);
+    return `<article class="contact-card"><div class="contact-card__body"><div class="follow-up-item__title-row"><h3>${escapeHtml(contact.name)}</h3>${paused ? `<span class="pause-badge">Paused</span>` : ""}</div><p class="contact-card__last">${paused ? escapeHtml(renderPauseText(contact)) : `Next Study: ${escapeHtml(renderScheduleText(contact))}`}</p>${contact.bibleStudy.publication ? `<p class="muted-text">${escapeHtml(contact.bibleStudy.publication)}</p>` : ""}${contact.bibleStudy.progress ? `<p class="muted-text">Progress: ${escapeHtml(contact.bibleStudy.progress)}</p>` : ""}${contact.bibleStudy.location ? `<p class="muted-text">Location: ${escapeHtml(contact.bibleStudy.location)}</p>` : ""}</div><div class="contact-card__actions"><button class="button button--primary" type="button" data-action="open-study" data-contact-id="${escapeHtml(contact.id)}">Open</button></div></article>`;
   }
 
   const screenRenderers = {
@@ -722,7 +825,16 @@
         </section>`;
     },
     studies() {
-      return renderDeferredScreen("Bible Studies", "Established Bible studies will remain part of each person’s single continuing record. This lifecycle arrives in Increment 8.");
+      if (contactEditor) return renderContactForm();
+      if (activeContactId) {
+        const activeContact = appState.contacts.find((contact) => contact.id === activeContactId && contact.relationshipType === "bibleStudy");
+        if (activeContact) return renderContactDetail(activeContact);
+        activeContactId = null;
+        interactionEditor = null;
+        studyLifecycleEditor = null;
+      }
+      const studies = sortedContacts().filter((contact) => contact.relationshipType === "bibleStudy" && contact.bibleStudy.isActive);
+      return `<section aria-labelledby="studies-title"><header class="screen-heading"><h2 id="studies-title">Bible Studies</h2><p>${studies.length} ${studies.length === 1 ? "active study" : "active studies"}</p></header>${studies.length ? `<div class="contact-list">${studies.map(renderStudyCard).join("")}</div>` : `<article class="empty-state"><p class="section-label">Bible Studies</p><h3>No active studies</h3><p>Open a contact and choose Establish Bible Study when a follow-up progresses.</p><button class="button button--primary button--spaced" type="button" data-action="open-contacts">View Contacts</button></article>`}</section>`;
     },
     report() {
       return renderDeferredScreen("Monthly Report", "Monthly totals will be calculated from authoritative contact history in Increment 9.");
@@ -753,6 +865,7 @@
     activeContactId = null;
     interactionEditor = null;
     pauseEditor = false;
+    studyLifecycleEditor = null;
     showPausedOnly = false;
     contactSearchQuery = "";
     renderActiveScreen();
@@ -840,18 +953,24 @@
 
   function readInteractionForm(form) {
     const formData = new FormData(form);
-    const type = formData.get("type") === "successfulContact" ? "successfulContact" : "attemptedContact";
+    const requestedType = textOrEmpty(formData.get("type"));
+    const type = ["successfulContact", "attemptedContact", "conductedStudy", "missedStudy"].includes(requestedType) ? requestedType : "attemptedContact";
+    const successful = type === "successfulContact" || type === "conductedStudy";
     return {
       type,
       date: textOrEmpty(formData.get("date")),
       time: textOrEmpty(formData.get("time")),
-      discussionNotes: type === "successfulContact" ? textOrEmpty(formData.get("discussionNotes")).trim() : "",
-      scriptures: type === "successfulContact" ? textOrEmpty(formData.get("scriptures")).trim() : "",
+      discussionNotes: successful ? textOrEmpty(formData.get("discussionNotes")).trim() : "",
+      scriptures: successful ? textOrEmpty(formData.get("scriptures")).trim() : "",
       literature: type === "successfulContact" ? textOrEmpty(formData.get("literature")).trim() : "",
-      note: type === "attemptedContact" ? textOrEmpty(formData.get("note")).trim() : "",
+      note: type === "attemptedContact" || type === "missedStudy" ? textOrEmpty(formData.get("note")).trim() : "",
+      studyProgress: type === "conductedStudy" ? textOrEmpty(formData.get("studyProgress")).trim() : "",
       nextFollowUpMode: textOrEmpty(formData.get("nextFollowUpMode")),
       nextSpecificDate: textOrEmpty(formData.get("nextSpecificDate")),
-      nextSpecificTime: textOrEmpty(formData.get("nextSpecificTime"))
+      nextSpecificTime: textOrEmpty(formData.get("nextSpecificTime")),
+      nextStudyMode: textOrEmpty(formData.get("nextStudyMode")),
+      nextStudyDate: textOrEmpty(formData.get("nextStudyDate")),
+      nextStudyTime: textOrEmpty(formData.get("nextStudyTime"))
     };
   }
 
@@ -875,6 +994,13 @@
       nextDateInput.focus();
       return;
     }
+    if (!interactionEditor.entryId && (values.type === "conductedStudy" || values.type === "missedStudy") && values.nextStudyMode === "specific" && !values.nextStudyDate) {
+      const nextDateInput = form.elements.nextStudyDate;
+      nextDateInput.setAttribute("aria-invalid", "true");
+      form.querySelector("#next-study-date-error").hidden = false;
+      nextDateInput.focus();
+      return;
+    }
 
     const now = new Date().toISOString();
     let nextHistory;
@@ -885,6 +1011,7 @@
     }
 
     const shouldApplyNextDecision = !interactionEditor.entryId && values.type === "successfulContact";
+    const shouldApplyStudyDecision = !interactionEditor.entryId && (values.type === "conductedStudy" || values.type === "missedStudy");
     const nextContacts = appState.contacts.map((item) => item.id === contact.id ? {
       ...item,
       history: nextHistory,
@@ -893,6 +1020,12 @@
         specificDate: values.nextFollowUpMode === "specific" ? values.nextSpecificDate : "",
         specificTime: values.nextFollowUpMode === "specific" ? values.nextSpecificTime : ""
       } : item.followUp,
+      bibleStudy: shouldApplyStudyDecision ? {
+        ...item.bibleStudy,
+        progress: values.type === "conductedStudy" && values.studyProgress ? values.studyProgress : item.bibleStudy.progress,
+        specificDate: values.nextStudyMode === "specific" ? values.nextStudyDate : "",
+        specificTime: values.nextStudyMode === "specific" ? values.nextStudyTime : ""
+      } : item.bibleStudy,
       updatedAt: now
     } : item);
     appState = persistence.save({ ...appState, contacts: nextContacts });
@@ -904,12 +1037,64 @@
     const contact = appState.contacts.find((item) => item.id === activeContactId);
     const entry = contact?.history.find((item) => item.id === entryId);
     if (!contact || !entry) return;
-    const confirmed = window.confirm(`Delete this ${isSuccessfulEntry(entry) ? "successful contact" : "attempted contact"} from ${formatDate(entry.date, entry.time)}?\n\nThis cannot be undone.`);
+    const entryLabels = { successfulContact: "successful contact", attemptedContact: "attempted contact", conductedStudy: "conducted study", missedStudy: "missed/attempted study" };
+    const confirmed = window.confirm(`Delete this ${entryLabels[entry.type] || "history entry"} from ${formatDate(entry.date, entry.time)}?\n\nThis cannot be undone.`);
     if (!confirmed) return;
     const nextContacts = appState.contacts.map((item) => item.id === contact.id
       ? { ...item, history: item.history.filter((historyEntry) => historyEntry.id !== entryId), updatedAt: new Date().toISOString() }
       : item);
     appState = persistence.save({ ...appState, contacts: nextContacts });
+    renderActiveScreen();
+  }
+
+  function saveStudyLifecycle(form, isEnding) {
+    const contact = appState.contacts.find((item) => item.id === activeContactId);
+    if (!contact) return;
+    const formData = new FormData(form);
+    const now = new Date().toISOString();
+    let updatedContact;
+
+    if (isEnding) {
+      const intervalSelection = textOrEmpty(formData.get("intervalSelection"));
+      const customInterval = Number.parseInt(textOrEmpty(formData.get("customIntervalDays")), 10);
+      const normalIntervalDays = intervalSelection === "custom" ? customInterval : intervalSelection === "none" ? null : Number.parseInt(intervalSelection, 10);
+      const specificDate = textOrEmpty(formData.get("specificDate"));
+      const specificTime = textOrEmpty(formData.get("specificTime"));
+      if (intervalSelection === "custom" && (!Number.isInteger(normalIntervalDays) || normalIntervalDays < 1 || normalIntervalDays > 3650)) {
+        form.elements.customIntervalDays.setAttribute("aria-invalid", "true");
+        form.querySelector("#interval-error").hidden = false;
+        form.elements.customIntervalDays.focus();
+        return;
+      }
+      if (specificTime && !specificDate) {
+        form.elements.specificDate.setAttribute("aria-invalid", "true");
+        form.querySelector("#specific-date-error").hidden = false;
+        form.elements.specificDate.focus();
+        return;
+      }
+      updatedContact = { ...contact, relationshipType: "followUp", followUp: { ...contact.followUp, normalIntervalDays, specificDate, specificTime: specificDate ? specificTime : "" }, bibleStudy: { ...contact.bibleStudy, isActive: false, specificDate: "", specificTime: "" }, updatedAt: now };
+    } else {
+      const normalDay = textOrEmpty(formData.get("normalDay"));
+      const normalTime = textOrEmpty(formData.get("normalTime"));
+      const specificDate = textOrEmpty(formData.get("specificDate"));
+      const specificTime = textOrEmpty(formData.get("specificTime"));
+      if (normalTime && normalDay === "") {
+        form.elements.normalDay.setAttribute("aria-invalid", "true");
+        form.querySelector("#study-day-error").hidden = false;
+        form.elements.normalDay.focus();
+        return;
+      }
+      if (specificTime && !specificDate) {
+        form.elements.specificDate.setAttribute("aria-invalid", "true");
+        form.querySelector("#study-specific-date-error").hidden = false;
+        form.elements.specificDate.focus();
+        return;
+      }
+      updatedContact = { ...contact, relationshipType: "bibleStudy", bibleStudy: { ...contact.bibleStudy, isActive: true, normalDay, normalTime: normalDay ? normalTime : "", location: textOrEmpty(formData.get("location")).trim(), publication: textOrEmpty(formData.get("publication")).trim(), progress: textOrEmpty(formData.get("progress")).trim(), specificDate, specificTime: specificDate ? specificTime : "" }, updatedAt: now };
+    }
+
+    appState = persistence.save({ ...appState, contacts: appState.contacts.map((item) => item.id === contact.id ? updatedContact : item) });
+    studyLifecycleEditor = null;
     renderActiveScreen();
   }
 
@@ -942,7 +1127,7 @@
   function resumeContact(contactId) {
     const contact = appState.contacts.find((item) => item.id === contactId);
     if (!contact) return;
-    const confirmed = window.confirm(`Resume follow-up for ${contact.name}?`);
+    const confirmed = window.confirm(`Resume scheduling for ${contact.name}?`);
     if (!confirmed) return;
     const nextContacts = appState.contacts.map((item) => item.id === contact.id ? {
       ...item,
@@ -972,6 +1157,7 @@
       contactEditor = null;
       interactionEditor = null;
       pauseEditor = false;
+      studyLifecycleEditor = null;
       showPausedOnly = false;
       renderActiveScreen();
       mainElement.focus({ preventScroll: true });
@@ -1007,16 +1193,31 @@
       activeContactId = contactId;
       interactionEditor = null;
       pauseEditor = false;
+      studyLifecycleEditor = null;
       renderActiveScreen();
     }
-    if (action === "back-to-contacts") {
+    if (action === "open-study") {
+      activeScreen = "studies";
+      activeContactId = contactId;
+      interactionEditor = null;
+      pauseEditor = false;
+      studyLifecycleEditor = null;
+      renderActiveScreen();
+    }
+    if (action === "back-to-list") {
       activeContactId = null;
       interactionEditor = null;
       pauseEditor = false;
+      studyLifecycleEditor = null;
       renderActiveScreen();
     }
     if (action === "add-successful" || action === "add-attempted") {
       interactionEditor = { type: action === "add-successful" ? "successfulContact" : "attemptedContact", entryId: null };
+      renderActiveScreen();
+      mainElement.querySelector("#interaction-date")?.focus();
+    }
+    if (action === "add-conducted-study" || action === "add-missed-study") {
+      interactionEditor = { type: action === "add-conducted-study" ? "conductedStudy" : "missedStudy", entryId: null };
       renderActiveScreen();
       mainElement.querySelector("#interaction-date")?.focus();
     }
@@ -1040,6 +1241,17 @@
     }
     if (action === "cancel-pause") {
       pauseEditor = false;
+      renderActiveScreen();
+    }
+    if (action === "start-study" || action === "edit-study" || action === "end-study") {
+      activeContactId = contactId;
+      studyLifecycleEditor = action === "end-study" ? "end" : "start";
+      interactionEditor = null;
+      pauseEditor = false;
+      renderActiveScreen();
+    }
+    if (action === "cancel-study-lifecycle") {
+      studyLifecycleEditor = null;
       renderActiveScreen();
     }
     if (action === "resume-contact") resumeContact(contactId);
@@ -1068,6 +1280,14 @@
       if (event.target.id === "pause-form") {
         event.preventDefault();
         savePause(event.target);
+      }
+      if (event.target.id === "start-study-form") {
+        event.preventDefault();
+        saveStudyLifecycle(event.target, false);
+      }
+      if (event.target.id === "end-study-form") {
+        event.preventDefault();
+        saveStudyLifecycle(event.target, true);
       }
     });
     mainElement.addEventListener("input", (event) => {
@@ -1098,10 +1318,22 @@
         event.target.removeAttribute("aria-invalid");
         const error = mainElement.querySelector("#specific-date-error");
         if (error) error.hidden = true;
+        const studyError = mainElement.querySelector("#study-specific-date-error");
+        if (studyError) studyError.hidden = true;
       }
       if (event.target.name === "nextSpecificDate" && event.target.value) {
         event.target.removeAttribute("aria-invalid");
         const error = mainElement.querySelector("#next-date-error");
+        if (error) error.hidden = true;
+      }
+      if (event.target.name === "nextStudyDate" && event.target.value) {
+        event.target.removeAttribute("aria-invalid");
+        const error = mainElement.querySelector("#next-study-date-error");
+        if (error) error.hidden = true;
+      }
+      if (event.target.name === "normalDay" && event.target.value !== "") {
+        event.target.removeAttribute("aria-invalid");
+        const error = mainElement.querySelector("#study-day-error");
         if (error) error.hidden = true;
       }
       if (event.target.name === "pauseUntilDate" && event.target.value > todayDateValue()) {
@@ -1117,6 +1349,10 @@
       }
       if (event.target.name === "nextFollowUpMode") {
         const specificFields = mainElement.querySelector("[data-interaction-specific]");
+        if (specificFields) specificFields.hidden = event.target.value !== "specific";
+      }
+      if (event.target.name === "nextStudyMode") {
+        const specificFields = mainElement.querySelector("[data-study-specific]");
         if (specificFields) specificFields.hidden = event.target.value !== "specific";
       }
       if (event.target.name === "pauseStatus") {
