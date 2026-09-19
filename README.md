@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 10 — Backup and Restore is implemented and awaiting user verification. Increments 1–9 are verified.
+Increment 11 — PWA and Cross-Platform Pass is implemented and awaiting device verification. Increments 1–10 are verified.
 
 The planned functional-core increments through Backup/Restore now exist, but this is not yet the first real-world release candidate. Cross-platform PWA verification and full regression remain in Increments 11 and 12.
 
-Next exact step after Increment 10 verification: Increment 11 — PWA and cross-platform verification pass.
+Next exact step after Increment 11 device verification: Increment 12 — full regression and first real-world release-candidate evaluation.
 
 ## Governing principles
 
@@ -239,9 +239,32 @@ Status: verified.
 13. Confirm the Backup/Restore controls, validation messages, and replacement summary have no sideways scrolling on phone, tablet, and desktop layouts.
 14. After loading the update online, launch the installed app offline and confirm export and restore remain available.
 
-Status: awaiting user verification.
+Status: verified.
+
+## Increment 11 verification
+
+Use fictional information only. Complete every applicable row on actual hardware; browser emulation alone does not verify device support.
+
+| Platform | Required checks |
+| --- | --- |
+| iPhone | Open in Safari; exercise the main workflow; add to Home Screen; launch in standalone mode; confirm safe-area spacing and native date/time fields; launch again with airplane mode enabled. |
+| iPad | Open in Safari in portrait and landscape; confirm readable reflow and no horizontal page scrolling; add to Home Screen; launch in standalone mode; verify saved data after closing and reopening. |
+| Android phone or tablet | Open in Chrome; exercise the main workflow; install the PWA; launch in standalone mode; confirm touch controls and native date/time fields; launch again with airplane mode enabled. |
+| Desktop | Exercise the normal workflow at wide and narrow browser widths; confirm responsive navigation; export and restore a backup; reload and verify persistence. |
+
+For each platform:
+
+1. Begin online and confirm the current application shell loads after any automatic service-worker update reload.
+2. Confirm Home, Contacts, Studies, Report, and Data each open and only the active major screen is rendered.
+3. Create or edit a fictional contact, record history, and verify scheduling, pause/resume, Bible-study state, and monthly reporting remain consistent.
+4. Close and reopen the browser or installed app and confirm local data persists.
+5. Confirm normal vertical page scrolling, reachable controls, readable text, comfortable touch targets, safe-area clearance, and no unintended horizontal page scrolling.
+6. Launch offline after at least one successful online load and confirm all local workflows remain available. External phone, email, and maps handoffs are outside the offline guarantee.
+7. Return online and confirm the app still opens normally and retains the same local data.
+
+Status: awaiting actual-device verification.
 
 ## Known limitations
 
-- Cross-platform installed-PWA verification remains for Increment 11.
-- Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.
+- Increment 11 cannot be marked verified until its iPhone, iPad, Android, and desktop checks are completed on actual hardware.
+- Full operational-loop regression remains required in Increment 12 before the first real-world release candidate.
