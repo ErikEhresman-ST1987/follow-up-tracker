@@ -40,12 +40,21 @@ input,
 textarea,
 select {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 3rem;
   border: 1px solid #9aaca7;
   border-radius: 0.7rem;
   background: #fff;
   color: var(--text);
   padding: 0.7rem 0.8rem;
+}
+
+input[type="date"],
+input[type="time"] {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
 textarea {
