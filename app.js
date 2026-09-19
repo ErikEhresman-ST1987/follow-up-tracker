@@ -2,6 +2,7 @@
   "use strict";
 
   const DATA_VERSION = 1;
+  const BACKUP_FORMAT_VERSION = 1;
   const STORAGE_KEY = "followUpTracker.appData";
   const VALID_SCREENS = new Set(["home", "contacts", "studies", "report", "data"]);
 
@@ -15,6 +16,9 @@
   let contactSearchQuery = "";
   let studyLifecycleEditor = null;
   let reportMonth = currentMonthValue();
+  let pendingRestore = null;
+  let restoreMessage = "";
+  let restoreMessageType = "";
 
   const mainElement = document.querySelector("#main-content");
   const saveStatusElement = document.querySelector("#save-status");
@@ -140,6 +144,56 @@
     };
   }
 
+  function isValidDateValue(value, allowEmpty = true) {
+    if (value === "") return allowEmpty;
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(year, month - 1, day, 12);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  }
+
+  function isValidTimeValue(value) {
+    return typeof value === "string" && (value === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(value));
+  }
+
+  function validateBackupDocument(candidate) {
+    if (!isPlainObject(candidate)) throw new Error("This file is not a Follow-Up Tracker backup.");
+    if (candidate.backupFormatVersion !== BACKUP_FORMAT_VERSION) throw new Error("This backup format is not supported by this version of the app.");
+    if (candidate.appDataVersion !== DATA_VERSION) throw new Error("This backup uses an unsupported application-data version.");
+    if (typeof candidate.backupCreatedAt !== "string" || Number.isNaN(Date.parse(candidate.backupCreatedAt))) throw new Error("The backup date is missing or invalid.");
+    if (!isPlainObject(candidate.appData) || candidate.appData.dataVersion !== DATA_VERSION) throw new Error("The backup does not contain supported application data.");
+    if (!isPlainObject(candidate.appData.settings) || !Array.isArray(candidate.appData.contacts)) throw new Error("The backup application structure is incomplete.");
+
+    const contactIds = new Set();
+    const historyIds = new Set();
+    const textFields = ["address", "phone", "email", "generalNote", "createdAt", "updatedAt"];
+    candidate.appData.contacts.forEach((contact, contactIndex) => {
+      const label = `Contact ${contactIndex + 1}`;
+      if (!isPlainObject(contact) || typeof contact.id !== "string" || !contact.id || typeof contact.name !== "string" || !contact.name.trim()) throw new Error(`${label} is missing a stable ID or name.`);
+      if (contactIds.has(contact.id)) throw new Error("The backup contains duplicate contact IDs.");
+      contactIds.add(contact.id);
+      if (textFields.some((field) => contact[field] !== undefined && typeof contact[field] !== "string")) throw new Error(`${label} contains invalid contact information.`);
+      if (!["followUp", "bibleStudy"].includes(contact.relationshipType)) throw new Error(`${label} has an unsupported relationship type.`);
+      if (!isPlainObject(contact.followUp) || !isPlainObject(contact.pause) || !isPlainObject(contact.bibleStudy) || !Array.isArray(contact.history)) throw new Error(`${label} is missing required scheduling or history information.`);
+      if (contact.followUp.normalIntervalDays !== null && (!Number.isInteger(contact.followUp.normalIntervalDays) || contact.followUp.normalIntervalDays < 1 || contact.followUp.normalIntervalDays > 3650)) throw new Error(`${label} has an invalid normal interval.`);
+      if (!isValidDateValue(contact.followUp.specificDate) || !isValidTimeValue(contact.followUp.specificTime)) throw new Error(`${label} has an invalid follow-up date or time.`);
+      if (!["active", "untilDate", "indefinite"].includes(contact.pause.status) || !isValidDateValue(contact.pause.untilDate) || typeof contact.pause.reason !== "string") throw new Error(`${label} has invalid pause information.`);
+      const study = contact.bibleStudy;
+      if (typeof study.isActive !== "boolean" || !(study.normalDay === "" || /^[0-6]$/.test(study.normalDay)) || !isValidTimeValue(study.normalTime) || !isValidDateValue(study.specificDate) || !isValidTimeValue(study.specificTime)) throw new Error(`${label} has invalid Bible-study scheduling information.`);
+      if (["location", "publication", "progress"].some((field) => typeof study[field] !== "string")) throw new Error(`${label} has invalid Bible-study details.`);
+
+      contact.history.forEach((entry, entryIndex) => {
+        if (!isPlainObject(entry) || typeof entry.id !== "string" || !entry.id || !["successfulContact", "attemptedContact", "conductedStudy", "missedStudy"].includes(entry.type)) throw new Error(`${label}, history entry ${entryIndex + 1}, is invalid.`);
+        if (historyIds.has(entry.id)) throw new Error("The backup contains duplicate history-entry IDs.");
+        historyIds.add(entry.id);
+        if (!isValidDateValue(entry.date, false) || !isValidTimeValue(entry.time)) throw new Error(`${label}, history entry ${entryIndex + 1}, has an invalid date or time.`);
+        if (["discussionNotes", "scriptures", "literature", "note", "studyProgress", "createdAt", "updatedAt"].some((field) => entry[field] !== undefined && typeof entry[field] !== "string")) throw new Error(`${label}, history entry ${entryIndex + 1}, contains invalid text.`);
+      });
+    });
+
+    return normalizeState(candidate.appData);
+  }
+
   const persistence = {
     load() {
       const storedValue = localStorage.getItem(STORAGE_KEY);
@@ -167,6 +221,86 @@
   function setSaveStatus(message, isWarning = false) {
     saveStatusElement.textContent = message;
     saveStatusElement.dataset.warning = String(isWarning);
+  }
+
+  function exportBackup() {
+    const backup = {
+      backupFormatVersion: BACKUP_FORMAT_VERSION,
+      backupCreatedAt: new Date().toISOString(),
+      appDataVersion: appState.dataVersion,
+      appData: appState
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `FollowUpTracker_Backup_${todayDateValue()}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    restoreMessage = "Backup prepared. Store the downloaded file somewhere private and dependable.";
+    restoreMessageType = "success";
+    renderActiveScreen();
+  }
+
+  async function stageRestoreFile(file) {
+    pendingRestore = null;
+    restoreMessage = "";
+    restoreMessageType = "";
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      restoreMessage = "That file is too large to be a valid Follow-Up Tracker backup.";
+      restoreMessageType = "error";
+      renderActiveScreen();
+      return;
+    }
+    try {
+      const parsed = JSON.parse(await file.text());
+      const validatedState = validateBackupDocument(parsed);
+      pendingRestore = {
+        appData: validatedState,
+        backupCreatedAt: parsed.backupCreatedAt,
+        contactCount: validatedState.contacts.length,
+        historyCount: validatedState.contacts.reduce((total, contact) => total + contact.history.length, 0)
+      };
+      restoreMessage = "Backup validated successfully. Review the replacement details below.";
+      restoreMessageType = "success";
+    } catch (error) {
+      console.error("Backup validation failed.", error);
+      restoreMessage = error instanceof Error ? error.message : "The selected backup could not be read.";
+      restoreMessageType = "error";
+    }
+    renderActiveScreen();
+  }
+
+  function cancelRestore() {
+    pendingRestore = null;
+    restoreMessage = "Restore canceled. Current information was not changed.";
+    restoreMessageType = "";
+    renderActiveScreen();
+  }
+
+  function commitRestore() {
+    if (!pendingRestore) return;
+    const confirmed = window.confirm(`Replace all current Follow-Up Tracker information?\n\nCurrent contacts: ${appState.contacts.length}\nBackup contacts: ${pendingRestore.contactCount}\nBackup history entries: ${pendingRestore.historyCount}\n\nThis replacement cannot be undone unless you already exported a backup of the current information.`);
+    if (!confirmed) return;
+
+    const previousState = appState;
+    try {
+      appState = persistence.save(pendingRestore.appData);
+      const verifiedState = normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+      if (JSON.stringify(verifiedState) !== JSON.stringify(appState)) throw new Error("Saved information did not pass read-back verification.");
+      pendingRestore = null;
+      window.alert("Restore completed and verified. The app will now reload.");
+      window.location.reload();
+    } catch (error) {
+      console.error("Restore could not be completed.", error);
+      try { appState = persistence.save(previousState); } catch (rollbackError) { console.error("Previous state could not be rewritten.", rollbackError); }
+      restoreMessage = "Restore could not be completed. The previous in-memory information remains active.";
+      restoreMessageType = "error";
+      renderActiveScreen();
+    }
   }
 
   function escapeHtml(value) {
@@ -885,11 +1019,16 @@
         </section>`;
     },
     data() {
+      const createdText = pendingRestore ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(pendingRestore.backupCreatedAt)) : "";
       return `
         <section aria-labelledby="data-title">
-          <header class="screen-heading"><h2 id="data-title">Data &amp; Settings</h2><p>Local persistence is active. Backup and Restore will be added as part of the complete functional core.</p></header>
-          <article class="panel"><p class="section-label">Application status</p><dl class="status-list"><div class="status-row"><dt>Data version</dt><dd>${appState.dataVersion}</dd></div><div class="status-row"><dt>Storage</dt><dd>On this device</dd></div><div class="status-row"><dt>Contacts</dt><dd>${appState.contacts.length}</dd></div></dl></article>
-          <p class="privacy-note">Contact information and future exported backups may contain private information. Keep the device and backup files secure.</p>
+          <header class="screen-heading"><h2 id="data-title">Data &amp; Settings</h2><p>Local persistence and complete Backup/Restore are active.</p></header>
+          <article class="panel"><p class="section-label">Application status</p><dl class="status-list"><div class="status-row"><dt>Data version</dt><dd>${appState.dataVersion}</dd></div><div class="status-row"><dt>Backup format</dt><dd>${BACKUP_FORMAT_VERSION}</dd></div><div class="status-row"><dt>Storage</dt><dd>On this device</dd></div><div class="status-row"><dt>Contacts</dt><dd>${appState.contacts.length}</dd></div></dl></article>
+          <article class="panel data-action-panel"><div><p class="section-label">Backup</p><h3>Export Complete Backup</h3><p>Download all contacts, schedules, study information, settings, and history as one JSON file.</p></div><button class="button button--primary" type="button" data-action="export-backup">Export Backup</button></article>
+          <article class="panel data-action-panel"><div><p class="section-label">Restore</p><h3>Restore from Backup</h3><p>The selected file is parsed, validated, and version-checked before replacement is offered.</p></div><label class="button button--secondary file-button" for="restore-file">Choose Backup File</label><input class="visually-hidden" id="restore-file" name="restoreFile" type="file" accept="application/json,.json"></article>
+          ${restoreMessage ? `<p class="restore-message restore-message--${restoreMessageType || "neutral"}" role="status">${escapeHtml(restoreMessage)}</p>` : ""}
+          ${pendingRestore ? `<article class="panel restore-confirmation"><p class="section-label">Validated backup</p><h3>Ready to Replace Current Data</h3><dl class="status-list"><div class="status-row"><dt>Backup created</dt><dd>${escapeHtml(createdText)}</dd></div><div class="status-row"><dt>Contacts</dt><dd>${pendingRestore.contactCount}</dd></div><div class="status-row"><dt>History entries</dt><dd>${pendingRestore.historyCount}</dd></div></dl><p>This will replace the complete current dataset. Export the current data first if you may need to recover it.</p><div class="form-actions"><button class="button button--danger-subtle" type="button" data-action="confirm-restore">Replace Current Data</button><button class="button button--secondary" type="button" data-action="cancel-restore">Cancel</button></div></article>` : ""}
+          <p class="privacy-note">Exported backups may contain names, addresses, phone numbers, email addresses, private notes, schedules, and complete history. Store backup files securely and avoid sharing them unnecessarily.</p>
         </section>`;
     }
   };
@@ -1300,6 +1439,9 @@
       renderActiveScreen();
     }
     if (action === "resume-contact") resumeContact(contactId);
+    if (action === "export-backup") exportBackup();
+    if (action === "cancel-restore") cancelRestore();
+    if (action === "confirm-restore") commitRestore();
     if (action === "delete-interaction") deleteInteraction(actionElement.dataset.entryId);
     if (action === "delete-contact") deleteContact(contactId);
   }
@@ -1392,6 +1534,9 @@
       }
     });
     mainElement.addEventListener("change", (event) => {
+      if (event.target.name === "restoreFile") {
+        stageRestoreFile(event.target.files?.[0]);
+      }
       if (event.target.name === "intervalSelection") {
         const customFields = mainElement.querySelector("[data-custom-interval]");
         if (customFields) customFields.hidden = event.target.value !== "custom";

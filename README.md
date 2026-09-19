@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 9 — Monthly Report is implemented and awaiting user verification. Increments 1–8 are verified.
+Increment 10 — Backup and Restore is implemented and awaiting user verification. Increments 1–9 are verified.
 
-This increment is not yet the complete usable application. Backup and Restore begin in Increment 10, and the first real-world trial begins only after the complete functional core has passed regression testing.
+The planned functional-core increments through Backup/Restore now exist, but this is not yet the first real-world release candidate. Cross-platform PWA verification and full regression remain in Increments 11 and 12.
 
-Next exact step after Increment 9 verification: Increment 10 — complete JSON backup, validation, and confirmed restore.
+Next exact step after Increment 10 verification: Increment 11 — PWA and cross-platform verification pass.
 
 ## Governing principles
 
@@ -32,7 +32,7 @@ Next exact step after Increment 9 verification: Increment 10 — complete JSON b
 
 - Storage key: `followUpTracker.appData`
 - Current data version: `1`
-- Backup-format version: not active until Increment 10
+- Backup-format version: `1`
 - Authoritative application state: one in-memory `appState` object
 - Persistence: one `persistence` boundary in `app.js` owns load, normalization, and save behavior
 - Initial state shape:
@@ -220,9 +220,28 @@ Status: verified. The iOS native date/time control overflow correction was also 
 12. Confirm the month control and report cards have no sideways scrolling on phone and tablet layouts.
 13. After loading the update online, launch the installed app offline and confirm monthly reporting remains available.
 
+Status: verified.
+
+## Increment 10 verification
+
+1. Create several fictional contacts with multiple successful, attempted, conducted-study, and missed-study history entries.
+2. Include at least one paused contact, one active Bible Study, normal intervals, specific follow-up arrangements, and specific study arrangements.
+3. Open Data and export a backup. Confirm the suggested filename follows `FollowUpTracker_Backup_YYYY-MM-DD.json`.
+4. Store the exported file securely and confirm the interface warns that it may contain private contact information.
+5. Deliberately edit and delete several records after exporting so the current app no longer matches the backup.
+6. Choose the exported file for restore. Confirm the app displays the backup date, contact count, and history-entry count before replacement.
+7. Cancel at the replacement confirmation and confirm the deliberately changed current data remains unchanged.
+8. Choose the file again, approve replacement, and confirm the app reloads with the backed-up contacts, histories, schedules, pause state, and Bible-study state restored exactly.
+9. Completely close and reopen the app; confirm the restored information remains intact.
+10. Recheck Home scheduling and the selected month’s report to confirm restored history drives the same derived results.
+11. Try selecting a plain text file, malformed JSON, and an unrelated JSON file; confirm each is rejected without altering current information.
+12. If practical, alter a copy of the backup to use an unsupported backup-format version or data version; confirm it is rejected safely.
+13. Confirm the Backup/Restore controls, validation messages, and replacement summary have no sideways scrolling on phone, tablet, and desktop layouts.
+14. After loading the update online, launch the installed app offline and confirm export and restore remain available.
+
 Status: awaiting user verification.
 
 ## Known limitations
 
-- Backup and Restore are intentionally deferred to Increment 10.
+- Cross-platform installed-PWA verification remains for Increment 11.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.
