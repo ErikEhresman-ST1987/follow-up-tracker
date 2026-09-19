@@ -53,8 +53,11 @@ select {
 input[type="date"],
 input[type="time"] {
   display: block;
+  width: -webkit-fill-available;
   min-width: 0;
-  max-width: 100%;
+  max-width: -webkit-fill-available;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 textarea {
