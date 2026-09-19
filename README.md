@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 11 — PWA and Cross-Platform Pass is implemented and awaiting device verification. Increments 1–10 are verified.
+Increment 12 — Full Regression is implemented and awaiting final user acceptance. Increments 1–11 are verified.
 
-The planned functional-core increments through Backup/Restore now exist, but this is not yet the first real-world release candidate. Cross-platform PWA verification and full regression remain in Increments 11 and 12.
+The complete planned functional core now exists and has reached its first real-world release-candidate checkpoint.
 
-Next exact step after Increment 11 device verification: Increment 12 — full regression and first real-world release-candidate evaluation.
+Next exact step after final acceptance: begin limited real-world use with dependable backups and record only demonstrated thin points or defects.
 
 ## Governing principles
 
@@ -27,6 +27,7 @@ Next exact step after Increment 11 device verification: Increment 12 — full re
 - `manifest.json` — installable PWA metadata.
 - `service-worker.js` — versioned application-shell caching for offline loading.
 - `icons/` — local application icons.
+- `tests/regression.test.js` — dependency-free operational-core regression checks using fictional data.
 
 ## Data and ownership
 
@@ -262,9 +263,29 @@ For each platform:
 6. Launch offline after at least one successful online load and confirm all local workflows remain available. External phone, email, and maps handoffs are outside the offline guarantee.
 7. Return online and confirm the app still opens normally and retains the same local data.
 
-Status: awaiting actual-device verification.
+Status: verified.
+
+## Increment 12 verification
+
+Run the automated operational-core regression from the repository root:
+
+```sh
+node tests/regression.test.js
+```
+
+Then complete this final acceptance pass with fictional information:
+
+1. Reproduce Fred’s lifecycle: initial successful contact, 14-day interval, overdue state, unsuccessful attempt that does not clear the overdue state, later successful contact, Bible Study transition, four conducted studies, pause/resume, and return to Follow-Up.
+2. Add Wilma with three conducted study sessions and George with two ordinary successful follow-ups in the same selected month.
+3. Confirm the report shows **Follow-ups made: 9** and **Bible studies conducted: 2**; attempts and missed studies must not count.
+4. Confirm Home remains ordered Overdue → Due Today → Upcoming, with older overdue contacts first and appointment times visible.
+5. Edit and delete individual history entries and confirm Last Contact, scheduling, and reporting recalculate from retained authoritative history.
+6. Export a complete backup, deliberately change or delete data, restore the backup, and confirm exact recovery after fully closing and reopening the app.
+7. Launch the installed app offline and confirm the operational loop remains available without horizontal page overflow.
+
+Status: automated regression passed; awaiting final user acceptance.
 
 ## Known limitations
 
-- Increment 11 cannot be marked verified until its iPhone, iPad, Android, and desktop checks are completed on actual hardware.
-- Full operational-loop regression remains required in Increment 12 before the first real-world release candidate.
+- Data remains local to each browser/app installation; there is no cloud synchronization or automatic cross-device transfer.
+- Notifications, accounts, shared databases, calendar integration, and other explicit non-goals remain intentionally absent.
