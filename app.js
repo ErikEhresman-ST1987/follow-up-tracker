@@ -12,6 +12,7 @@
   let interactionEditor = null;
   let pauseEditor = false;
   let showPausedOnly = false;
+  let contactSearchQuery = "";
 
   const mainElement = document.querySelector("#main-content");
   const saveStatusElement = document.querySelector("#save-status");
@@ -171,6 +172,29 @@
 
   function sortedContacts() {
     return [...appState.contacts].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }
+
+  function normalizedSearchText(value) {
+    return textOrEmpty(value).trim().toLocaleLowerCase();
+  }
+
+  function filteredContacts() {
+    const query = normalizedSearchText(contactSearchQuery);
+    return sortedContacts().filter((contact) => {
+      if (showPausedOnly && !isActivelyPaused(contact)) return false;
+      if (!query) return true;
+      return normalizedSearchText(contact.name).includes(query)
+        || normalizedSearchText(contact.address).includes(query);
+    });
+  }
+
+  function contactInitial(contact) {
+    const firstCharacter = contact.name.trim().charAt(0).toLocaleUpperCase();
+    return /^[A-Z]$/u.test(firstCharacter) ? firstCharacter : "#";
+  }
+
+  function mapsUrl(address) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
   }
 
   function todayDateValue() {
@@ -574,9 +598,9 @@
         ${isPaused ? `<aside class="pause-banner"><strong>${escapeHtml(renderPauseText(contact))}</strong>${contact.pause.reason ? `<span>${escapeHtml(contact.pause.reason)}</span>` : ""}</aside>` : ""}
 
         <article class="panel contact-profile">
-          ${contact.address ? `<div><span>Address</span><p>${escapeHtml(contact.address)}</p></div>` : ""}
-          ${contact.phone ? `<div><span>Phone</span><p>${escapeHtml(contact.phone)}</p></div>` : ""}
-          ${contact.email ? `<div><span>Email</span><p>${escapeHtml(contact.email)}</p></div>` : ""}
+          ${contact.address ? `<div><span>Address</span><p>${escapeHtml(contact.address)}</p><a class="contact-action-link" href="${escapeHtml(mapsUrl(contact.address))}" target="_blank" rel="noopener noreferrer">Open in Maps</a></div>` : ""}
+          ${contact.phone ? `<div><span>Phone</span><p>${escapeHtml(contact.phone)}</p><a class="contact-action-link" href="tel:${escapeHtml(contact.phone)}">Call</a></div>` : ""}
+          ${contact.email ? `<div><span>Email</span><p>${escapeHtml(contact.email)}</p><a class="contact-action-link" href="mailto:${escapeHtml(contact.email)}">Compose Email</a></div>` : ""}
           ${contact.generalNote ? `<div class="contact-profile__full"><span>General Note</span><p>${escapeHtml(contact.generalNote)}</p></div>` : ""}
           ${![contact.address, contact.phone, contact.email, contact.generalNote].some(Boolean) ? `<p class="muted-text">No additional contact information.</p>` : ""}
         </article>
@@ -616,6 +640,34 @@
       </article>`;
   }
 
+  function renderAlphabeticalContacts(contacts) {
+    let previousInitial = "";
+    return contacts.map((contact) => {
+      const initial = contactInitial(contact);
+      const heading = initial === previousInitial ? "" : `<h3 class="alphabet-heading" aria-label="Names beginning with ${escapeHtml(initial)}">${escapeHtml(initial)}</h3>`;
+      previousInitial = initial;
+      return `${heading}${renderContactCard(contact)}`;
+    }).join("");
+  }
+
+  function renderContactResults() {
+    const contacts = filteredContacts();
+    const query = contactSearchQuery.trim();
+    const countText = `${contacts.length} ${contacts.length === 1 ? "person" : "people"}${query ? " found" : ""}`;
+    const emptyTitle = query ? "No matching contacts" : showPausedOnly ? "No paused contacts" : "No contacts yet";
+    const emptyText = query
+      ? "Try a different name or street address. History notes are intentionally not searched."
+      : showPausedOnly
+        ? "Contacts paused until a future date or indefinitely will appear here."
+        : "Add a person’s permanent information here, then open their record to begin the continuous history.";
+    return {
+      countText,
+      markup: contacts.length
+        ? `<div class="contact-list">${renderAlphabeticalContacts(contacts)}</div>`
+        : `<article class="empty-state"><p class="section-label">${query ? "Search" : showPausedOnly ? "Paused contacts" : "Ready to begin"}</p><h3>${emptyTitle}</h3><p>${emptyText}</p></article>`
+    };
+  }
+
   const screenRenderers = {
     home() {
       const contactCount = appState.contacts.length;
@@ -649,17 +701,24 @@
       }
       const allContacts = sortedContacts();
       const pausedCount = allContacts.filter((contact) => isActivelyPaused(contact)).length;
-      const contacts = showPausedOnly ? allContacts.filter((contact) => isActivelyPaused(contact)) : allContacts;
+      const results = renderContactResults();
       return `
         <section aria-labelledby="contacts-title">
           <header class="screen-heading screen-heading--actions">
-            <div><h2 id="contacts-title">${showPausedOnly ? "Paused Contacts" : "Contacts"}</h2><p>${showPausedOnly ? `${pausedCount} currently paused` : contacts.length === 0 ? "Create the first permanent contact record." : `${contacts.length} ${contacts.length === 1 ? "person" : "people"}`}</p></div>
+            <div><h2 id="contacts-title">${showPausedOnly ? "Paused Contacts" : "Contacts"}</h2><p id="contact-result-count" aria-live="polite">${results.countText}</p></div>
             <div class="heading-actions">
               <button class="button button--secondary" type="button" data-action="toggle-paused-view">${showPausedOnly ? "All Contacts" : `Paused (${pausedCount})`}</button>
               <button class="button button--primary" type="button" data-action="new-contact">Add Contact</button>
             </div>
           </header>
-          ${contacts.length === 0 ? `<article class="empty-state"><p class="section-label">${showPausedOnly ? "Paused contacts" : "Ready to begin"}</p><h3>${showPausedOnly ? "No paused contacts" : "No contacts yet"}</h3><p>${showPausedOnly ? "Contacts paused until a future date or indefinitely will appear here." : "Add a person’s permanent information here, then open their record to begin the continuous history."}</p></article>` : `<div class="contact-list">${contacts.map(renderContactCard).join("")}</div>`}
+          <div class="contact-search" role="search">
+            <label for="contact-search">Search by name or street address</label>
+            <div class="contact-search__controls">
+              <input id="contact-search" name="contactSearch" type="search" inputmode="search" autocomplete="off" value="${escapeHtml(contactSearchQuery)}" placeholder="Name or address">
+              ${contactSearchQuery ? `<button class="button button--secondary" type="button" data-action="clear-contact-search">Clear</button>` : ""}
+            </div>
+          </div>
+          <div id="contact-results">${results.markup}</div>
         </section>`;
     },
     studies() {
@@ -695,6 +754,7 @@
     interactionEditor = null;
     pauseEditor = false;
     showPausedOnly = false;
+    contactSearchQuery = "";
     renderActiveScreen();
     mainElement.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -919,6 +979,7 @@
     }
     if (action === "new-contact") {
       activeContactId = null;
+      contactSearchQuery = "";
       contactEditor = { contactId: null };
       renderActiveScreen();
       mainElement.querySelector("#contact-name")?.focus();
@@ -926,6 +987,11 @@
     if (action === "toggle-paused-view") {
       showPausedOnly = !showPausedOnly;
       renderActiveScreen();
+    }
+    if (action === "clear-contact-search") {
+      contactSearchQuery = "";
+      renderActiveScreen();
+      mainElement.querySelector("#contact-search")?.focus();
     }
     if (action === "edit-contact") {
       activeContactId = contactId;
@@ -1005,6 +1071,14 @@
       }
     });
     mainElement.addEventListener("input", (event) => {
+      if (event.target.name === "contactSearch") {
+        contactSearchQuery = event.target.value;
+        const results = renderContactResults();
+        const resultsElement = mainElement.querySelector("#contact-results");
+        const countElement = mainElement.querySelector("#contact-result-count");
+        if (resultsElement) resultsElement.innerHTML = results.markup;
+        if (countElement) countElement.textContent = results.countText;
+      }
       if (event.target.name === "name" && event.target.value.trim()) {
         event.target.removeAttribute("aria-invalid");
         const error = mainElement.querySelector("#name-error");

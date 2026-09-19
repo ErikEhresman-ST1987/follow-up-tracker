@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 6 — Pause and Resume is implemented, activated, and verified. Increments 1–6 are verified.
+Increment 7 — Finding and Contact Actions is implemented and awaiting user verification. Increments 1–6 are verified.
 
-This increment is not yet the complete usable application. Finding and contact actions begin in Increment 7, and the first real-world trial begins only after the complete functional core has passed regression testing.
+This increment is not yet the complete usable application. Bible-study progression begins in Increment 8, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step after Increment 6 verification: Increment 7 — alphabetical browsing, practical search, and phone/email/address actions.
+Next exact step after Increment 7 verification: Increment 8 — Bible-study lifecycle, scheduling, and conducted/missed study history.
 
 ## Governing principles
 
@@ -164,8 +164,27 @@ Status: verified. Testing also confirmed the installed-PWA update path after the
 
 Status: verified.
 
+## Increment 7 verification
+
+1. Confirm the Contacts screen remains alphabetized by name and shows clear alphabetical section headings.
+2. Search using part of a fictional contact’s name with different capitalization; confirm the correct contact remains visible.
+3. Search using part of a fictional street address; confirm the correct contact remains visible.
+4. Search for text found only in General Note or contact history; confirm it does not produce a match.
+5. Enter a search with no matches; confirm the empty result explains that search covers name and street address.
+6. Clear the search and confirm the full alphabetical list returns.
+7. Open Paused Contacts, search within that view, and confirm only currently paused matching contacts appear.
+8. Open a contact with a phone number and tap Call; confirm the device offers the normal phone action without changing app data.
+9. Tap Compose Email; confirm the normal mail composer opens with the saved address.
+10. Tap Open in Maps; confirm the device/browser hands off the saved address for mapping without requiring an API key.
+11. Confirm contacts missing any of these optional fields simply omit the corresponding action.
+12. Reload or completely reopen the app and confirm contacts, pause states, schedules, and history remain unchanged.
+13. Confirm the search field, alphabetical headings, cards, and contact-action controls have no sideways scrolling on phone and tablet layouts.
+14. After loading the update online, launch the installed app offline and confirm alphabetical browsing and search still work. External call/email/maps handoffs may require the corresponding device service.
+
+Status: awaiting user verification.
+
 ## Known limitations
 
-- Search and direct phone, email, and address actions are intentionally deferred to Increment 7.
+- Bible-study lifecycle and scheduling are intentionally deferred to Increment 8.
 - Backup and Restore are not active until Increment 10.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.
