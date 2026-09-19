@@ -4,11 +4,11 @@ Follow-Up Tracker is a private, local-first application for recording ministry f
 
 ## Current status
 
-Increment 8 — Bible Studies is implemented and awaiting user verification. Increments 1–7 are verified.
+Increment 9 — Monthly Report is implemented and awaiting user verification. Increments 1–8 are verified.
 
-This increment is not yet the complete usable application. Monthly reporting begins in Increment 9, and the first real-world trial begins only after the complete functional core has passed regression testing.
+This increment is not yet the complete usable application. Backup and Restore begin in Increment 10, and the first real-world trial begins only after the complete functional core has passed regression testing.
 
-Next exact step after Increment 8 verification: Increment 9 — history-derived monthly reporting.
+Next exact step after Increment 9 verification: Increment 10 — complete JSON backup, validation, and confirmed restore.
 
 ## Governing principles
 
@@ -202,10 +202,27 @@ Status: verified.
 15. Confirm Bible Study lists, forms, detail panels, history, and controls have no sideways scrolling on phone and tablet layouts.
 16. After loading the update online, launch the installed app offline and confirm the complete Bible-study workflow remains available.
 
+Status: verified. The iOS native date/time control overflow correction was also verified on an actual iPhone.
+
+## Increment 9 verification
+
+1. Select the current month and confirm the report is visible at any time without running a separate calculation.
+2. Add or edit an ordinary Successful Contact in the selected month; confirm Follow-ups made increases by one.
+3. Add an Attempted Contact in the selected month; confirm neither total changes.
+4. Add several Conducted Study entries for one fictional person; confirm Follow-ups made increases for every session while Bible studies conducted increases only once.
+5. Add one or more Conducted Study entries for a second person; confirm Bible studies conducted increases by one additional person.
+6. Add a Missed/Attempted Study; confirm neither total changes.
+7. Change a successful entry’s date into or out of the selected month; confirm the report updates from history.
+8. Delete a successful or conducted-study entry; confirm the applicable totals decrease automatically.
+9. Select a previous month and confirm its totals are independently calculated from retained history.
+10. Reproduce the synthetic regression month: Fred with four conducted studies, Wilma with three conducted studies, and George with two ordinary successful follow-ups. Confirm Follow-ups made is 9 and Bible studies conducted is 2.
+11. Reload or completely reopen the app and confirm the same month totals are produced without stored manual counters.
+12. Confirm the month control and report cards have no sideways scrolling on phone and tablet layouts.
+13. After loading the update online, launch the installed app offline and confirm monthly reporting remains available.
+
 Status: awaiting user verification.
 
 ## Known limitations
 
-- Monthly reporting is intentionally deferred to Increment 9.
-- Backup and Restore are not active until Increment 10.
+- Backup and Restore are intentionally deferred to Increment 10.
 - Full iOS, Android, tablet, and desktop regression remains required before the first real-world release.

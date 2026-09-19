@@ -14,6 +14,7 @@
   let showPausedOnly = false;
   let contactSearchQuery = "";
   let studyLifecycleEditor = null;
+  let reportMonth = currentMonthValue();
 
   const mainElement = document.querySelector("#main-content");
   const saveStatusElement = document.querySelector("#save-status");
@@ -205,6 +206,16 @@
     return localDate.toISOString().slice(0, 10);
   }
 
+  function currentMonthValue() {
+    return todayDateValue().slice(0, 7);
+  }
+
+  function formatMonth(monthValue) {
+    if (!/^\d{4}-\d{2}$/.test(monthValue)) return "Selected month";
+    const date = new Date(`${monthValue}-01T12:00:00`);
+    return new Intl.DateTimeFormat(undefined, { year: "numeric", month: "long" }).format(date);
+  }
+
   function formatDate(dateValue, timeValue = "") {
     if (!dateValue) return "Date unavailable";
     const date = new Date(`${dateValue}T12:00:00`);
@@ -305,6 +316,21 @@
 
   function renderSummaryCard(label, count) {
     return `<article class="summary-card"><span class="summary-card__value">${count}</span><span class="summary-card__label">${label}</span></article>`;
+  }
+
+  function deriveMonthlyReport(monthValue) {
+    let followUpsMade = 0;
+    const conductedStudyContactIds = new Set();
+
+    appState.contacts.forEach((contact) => {
+      contact.history.forEach((entry) => {
+        if (!entry.date || entry.date.slice(0, 7) !== monthValue) return;
+        if (entry.type === "successfulContact" || entry.type === "conductedStudy") followUpsMade += 1;
+        if (entry.type === "conductedStudy") conductedStudyContactIds.add(contact.id);
+      });
+    });
+
+    return { followUpsMade, bibleStudiesConducted: conductedStudyContactIds.size };
   }
 
   function daysBetween(firstDate, secondDate) {
@@ -837,7 +863,26 @@
       return `<section aria-labelledby="studies-title"><header class="screen-heading"><h2 id="studies-title">Bible Studies</h2><p>${studies.length} ${studies.length === 1 ? "active study" : "active studies"}</p></header>${studies.length ? `<div class="contact-list">${studies.map(renderStudyCard).join("")}</div>` : `<article class="empty-state"><p class="section-label">Bible Studies</p><h3>No active studies</h3><p>Open a contact and choose Establish Bible Study when a follow-up progresses.</p><button class="button button--primary button--spaced" type="button" data-action="open-contacts">View Contacts</button></article>`}</section>`;
     },
     report() {
-      return renderDeferredScreen("Monthly Report", "Monthly totals will be calculated from authoritative contact history in Increment 9.");
+      const report = deriveMonthlyReport(reportMonth);
+      return `
+        <section aria-labelledby="report-title">
+          <header class="screen-heading"><h2 id="report-title">Monthly Report</h2><p>Calculated automatically from saved contact history.</p></header>
+          <div class="report-month-control">
+            <label for="report-month">Report month</label>
+            <input id="report-month" name="reportMonth" type="month" max="${currentMonthValue()}" value="${escapeHtml(reportMonth)}">
+          </div>
+          <h3 class="report-period">${escapeHtml(formatMonth(reportMonth))}</h3>
+          <div class="report-results">
+            <article class="report-card"><span class="report-card__value">${report.followUpsMade}</span><span class="report-card__label">Follow-ups made</span></article>
+            <article class="report-card"><span class="report-card__value">${report.bibleStudiesConducted}</span><span class="report-card__label">Bible studies conducted</span></article>
+          </div>
+          <article class="panel report-explanation">
+            <h3>How these totals work</h3>
+            <p><strong>Follow-ups made</strong> counts every successful contact during the selected month. Each conducted Bible-study session also counts as one successful follow-up.</p>
+            <p><strong>Bible studies conducted</strong> counts unique people with at least one conducted study during the month, not the number of sessions.</p>
+            <p>Attempts, missed studies, and scheduled studies that did not occur are not counted.</p>
+          </article>
+        </section>`;
     },
     data() {
       return `
@@ -1298,6 +1343,10 @@
         const countElement = mainElement.querySelector("#contact-result-count");
         if (resultsElement) resultsElement.innerHTML = results.markup;
         if (countElement) countElement.textContent = results.countText;
+      }
+      if (event.target.name === "reportMonth" && /^\d{4}-\d{2}$/.test(event.target.value)) {
+        reportMonth = event.target.value;
+        renderActiveScreen();
       }
       if (event.target.name === "name" && event.target.value.trim()) {
         event.target.removeAttribute("aria-invalid");
