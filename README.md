@@ -42,7 +42,8 @@ Next exact step after final acceptance: begin limited real-world use with depend
 {
   "dataVersion": 1,
   "settings": {},
-  "contacts": []
+  "contacts": [],
+  "serviceHours": []
 }
 ```
 
@@ -60,7 +61,7 @@ History will distinguish successful contact, attempted contact, conducted Bible 
 
 For a selected month:
 
-- Follow-ups made counts every successful interaction, including every conducted study session.
+- Service hours total the daily decimal-hours records for the selected month (one record per date).
 - Bible studies conducted counts unique contacts with at least one conducted study session.
 
 A Bible Study remains a state of the existing contact record, preserving the contact ID and continuous history when moving between Follow-Up and Bible Study.
@@ -289,3 +290,7 @@ Status: automated regression passed; awaiting final user acceptance.
 
 - Data remains local to each browser/app installation; there is no cloud synchronization or automatic cross-device transfer.
 - Notifications, accounts, shared databases, calendar integration, and other explicit non-goals remain intentionally absent.
+
+## Service-hours update (November 2026)
+
+The Report tab now records one decimal-hours total per date (0–24, up to two decimal places), supports editing and confirmed deletion, and automatically sums the selected month. The former Follow-ups made count is no longer reported. Bible studies conducted retains its unique-contact definition. Service hours are included in JSON backup/restore; older valid backups without this field load as an empty service-hours list. The data and backup format versions remain 1. The previous Increment 9 checklist documents historical behavior, not the current report.
