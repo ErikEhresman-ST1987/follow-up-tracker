@@ -110,6 +110,15 @@ input[type="month"] {
 }
 
 .report-explanation p { color: var(--text); }
+.service-hours-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; margin-top: 1rem; align-items: end; }
+.service-hours-form label { display: block; margin-bottom: 0.35rem; font-weight: 700; }
+.service-hours-form button { grid-column: 1 / -1; }
+.service-entry-list { list-style: none; padding: 0; margin: 0.75rem 0 0; }
+.service-entry-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; padding: 0.8rem 0; border-top: 1px solid var(--line); }
+.service-entry-list li strong { margin-left: auto; }
+.service-entry-actions { display: flex; gap: 0.5rem; width: 100%; }
+.service-entry-actions .button { flex: 1; }
+@media (max-width: 360px) { .service-hours-form { grid-template-columns: 1fr; } }
 
 textarea {
   min-height: 5.5rem;
