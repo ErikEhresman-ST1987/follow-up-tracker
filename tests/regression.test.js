@@ -192,15 +192,31 @@ test("Bible Study scheduling honors a one-time arrangement", () => {
   assert.equal(rules.deriveLastContact(study).id, "study-one");
 });
 
-test("the representative monthly report is 9 follow-ups and 2 studies", () => {
+test("the representative monthly report counts service hours and unique studies", () => {
   const month = "2026-09";
   const fred = contact("fred", "Fred", { history: [1, 2, 3, 4].map((day) => history(`fred-${day}`, "conductedStudy", `${month}-0${day}`)) });
   const wilma = contact("wilma", "Wilma", { history: [5, 6, 7].map((day) => history(`wilma-${day}`, "conductedStudy", `${month}-0${day}`)) });
   const george = contact("george", "George", { history: [8, 9].map((day) => history(`george-${day}`, "successfulContact", `${month}-0${day}`)) });
   fred.history.push(history("fred-attempt", "missedStudy", `${month}-10`));
   george.history.push(history("george-attempt", "attemptedContact", `${month}-11`));
-  rules.setState(state([fred, wilma, george]));
-  assert.deepEqual(JSON.parse(JSON.stringify(rules.deriveMonthlyReport(month))), { followUpsMade: 9, bibleStudiesConducted: 2 });
+  rules.setState({ ...state([fred, wilma, george]), serviceHours: [{ date: `${month}-01`, hours: 1.25 }, { date: `${month}-02`, hours: 2.5 }, { date: "2026-10-01", hours: 5 }] });
+  assert.deepEqual(JSON.parse(JSON.stringify(rules.deriveMonthlyReport(month))), { serviceHours: "3.75", bibleStudiesConducted: 2 });
+});
+
+test("service hours are normalized and old backups remain compatible", () => {
+  const old = state([]);
+  assert.deepEqual(JSON.parse(JSON.stringify(rules.normalizeState(old).serviceHours)), []);
+  const backup = { backupFormatVersion: 1, backupCreatedAt: "2026-09-19T12:00:00.000Z", appDataVersion: 1, appData: old };
+  assert.deepEqual(JSON.parse(JSON.stringify(rules.validateBackupDocument(backup).serviceHours)), []);
+  for (const invalid of [
+    [{ date: "2026-02-30", hours: 1 }],
+    [{ date: "2026-09-01", hours: -1 }],
+    [{ date: "2026-09-01", hours: 1.234 }],
+    [{ date: "2026-09-01", hours: 25 }],
+    [{ date: "2026-09-01", hours: 1 }, { date: "2026-09-01", hours: 2 }]
+  ]) {
+    assert.throws(() => rules.validateBackupDocument({ ...backup, appData: { ...old, serviceHours: invalid } }), /service-hours|Service-hours/);
+  }
 });
 
 test("backup validation preserves the complete authoritative dataset", () => {
