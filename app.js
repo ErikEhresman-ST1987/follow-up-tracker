@@ -1379,7 +1379,7 @@
     const date = new FormData(form).get("serviceDate");
     const raw = String(new FormData(form).get("serviceHours") ?? "").trim();
     const hours = Number(raw);
-    if (!isValidDateValue(date, false) || !/^(?:\\d+)(?:\\.\\d{1,2})?$/.test(raw) ||
+    if (!isValidDateValue(date, false) || !/^(?:\d+)(?:\.\d{1,2})?$/.test(raw) ||
         !isValidServiceHoursEntry({ date, hours })) {
       window.alert("Enter a valid date and decimal hours from 0 to 24, with no more than two decimal places.");
       return;
