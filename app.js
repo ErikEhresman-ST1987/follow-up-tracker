@@ -16,6 +16,7 @@
   let contactSearchQuery = "";
   let studyLifecycleEditor = null;
   let reportMonth = currentMonthValue();
+  let serviceDate = todayDateValue();
   let pendingRestore = null;
   let restoreMessage = "";
   let restoreMessageType = "";
@@ -25,7 +26,7 @@
   const navigationElement = document.querySelector(".app-nav");
 
   function createDefaultState() {
-    return { dataVersion: DATA_VERSION, settings: {}, contacts: [] };
+    return { dataVersion: DATA_VERSION, settings: {}, contacts: [], serviceHours: [] };
   }
 
   function createId(prefix) {
@@ -140,7 +141,8 @@
       ...candidate,
       dataVersion: DATA_VERSION,
       settings: isPlainObject(candidate.settings) ? candidate.settings : {},
-      contacts: Array.isArray(candidate.contacts) ? candidate.contacts.map(normalizeContact).filter(Boolean) : []
+      contacts: Array.isArray(candidate.contacts) ? candidate.contacts.map(normalizeContact).filter(Boolean) : [],
+      serviceHours: Array.isArray(candidate.serviceHours) ? candidate.serviceHours.map((entry) => ({ date: entry.date, hours: entry.hours })) : []
     };
   }
 
@@ -156,6 +158,24 @@
     return typeof value === "string" && (value === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(value));
   }
 
+  function isValidServiceHoursEntry(entry) {
+    return isPlainObject(entry) && isValidDateValue(entry.date, false) &&
+      typeof entry.hours === "number" && Number.isFinite(entry.hours) &&
+      entry.hours >= 0 && entry.hours <= 24 &&
+      Number.isInteger(Math.round(entry.hours * 100)) &&
+      Math.abs(entry.hours * 100 - Math.round(entry.hours * 100)) < 1e-8;
+  }
+
+  function validateServiceHours(entries) {
+    if (!Array.isArray(entries)) throw new Error("Service-hours records must be a list.");
+    const dates = new Set();
+    entries.forEach((entry) => {
+      if (!isValidServiceHoursEntry(entry)) throw new Error("A service-hours entry has an invalid date or decimal hours (0–24, at most two decimals).");
+      if (dates.has(entry.date)) throw new Error("Service-hours records contain a duplicate date.");
+      dates.add(entry.date);
+    });
+  }
+
   function validateBackupDocument(candidate) {
     if (!isPlainObject(candidate)) throw new Error("This file is not a Follow-Up Tracker backup.");
     if (candidate.backupFormatVersion !== BACKUP_FORMAT_VERSION) throw new Error("This backup format is not supported by this version of the app.");
@@ -163,6 +183,8 @@
     if (typeof candidate.backupCreatedAt !== "string" || Number.isNaN(Date.parse(candidate.backupCreatedAt))) throw new Error("The backup date is missing or invalid.");
     if (!isPlainObject(candidate.appData) || candidate.appData.dataVersion !== DATA_VERSION) throw new Error("The backup does not contain supported application data.");
     if (!isPlainObject(candidate.appData.settings) || !Array.isArray(candidate.appData.contacts)) throw new Error("The backup application structure is incomplete.");
+
+    validateServiceHours(candidate.appData.serviceHours === undefined ? [] : candidate.appData.serviceHours);
 
     const contactIds = new Set();
     const historyIds = new Set();
@@ -453,18 +475,18 @@
   }
 
   function deriveMonthlyReport(monthValue) {
-    let followUpsMade = 0;
     const conductedStudyContactIds = new Set();
-
     appState.contacts.forEach((contact) => {
       contact.history.forEach((entry) => {
-        if (!entry.date || entry.date.slice(0, 7) !== monthValue) return;
-        if (entry.type === "successfulContact" || entry.type === "conductedStudy") followUpsMade += 1;
-        if (entry.type === "conductedStudy") conductedStudyContactIds.add(contact.id);
+        if (entry.date && entry.date.slice(0, 7) === monthValue && entry.type === "conductedStudy") {
+          conductedStudyContactIds.add(contact.id);
+        }
       });
     });
-
-    return { followUpsMade, bibleStudiesConducted: conductedStudyContactIds.size };
+    const hundredths = appState.serviceHours
+      .filter((entry) => entry.date.slice(0, 7) === monthValue)
+      .reduce((sum, entry) => sum + Math.round(entry.hours * 100), 0);
+    return { serviceHours: (hundredths / 100).toFixed(2), bibleStudiesConducted: conductedStudyContactIds.size };
   }
 
   function daysBetween(firstDate, secondDate) {
@@ -998,23 +1020,44 @@
     },
     report() {
       const report = deriveMonthlyReport(reportMonth);
+      const entries = appState.serviceHours.filter((entry) => entry.date.slice(0, 7) === reportMonth)
+        .sort((a, b) => b.date.localeCompare(a.date));
+      const existing = appState.serviceHours.find((entry) => entry.date === serviceDate);
       return `
         <section aria-labelledby="report-title">
-          <header class="screen-heading"><h2 id="report-title">Monthly Report</h2><p>Calculated automatically from saved contact history.</p></header>
+          <header class="screen-heading"><h2 id="report-title">Monthly Report</h2><p>Service hours from daily entries; Bible studies from saved contact history.</p></header>
           <div class="report-month-control">
             <label for="report-month">Report month</label>
             <input id="report-month" name="reportMonth" type="month" max="${currentMonthValue()}" value="${escapeHtml(reportMonth)}">
           </div>
           <h3 class="report-period">${escapeHtml(formatMonth(reportMonth))}</h3>
           <div class="report-results">
-            <article class="report-card"><span class="report-card__value">${report.followUpsMade}</span><span class="report-card__label">Follow-ups made</span></article>
+            <article class="report-card"><span class="report-card__value">${report.serviceHours}</span><span class="report-card__label">Service hours</span></article>
             <article class="report-card"><span class="report-card__value">${report.bibleStudiesConducted}</span><span class="report-card__label">Bible studies conducted</span></article>
           </div>
+          <article class="panel">
+            <h3>Record service time</h3>
+            <form id="service-hours-form" class="service-hours-form">
+              <div><label for="service-date">Date</label><input id="service-date" name="serviceDate" type="date" required value="${escapeHtml(serviceDate)}"></div>
+              <div><label for="service-hours">Decimal hours</label><input id="service-hours" name="serviceHours" type="number" inputmode="decimal" min="0" max="24" step="0.01" required placeholder="e.g. 1.50" value="${existing ? existing.hours.toFixed(2) : ""}"></div>
+              <button class="button button--primary" type="submit">Save hours</button>
+            </form>
+            <p>One total per day. Saving the same date updates its hours.</p>
+          </article>
+          <article class="panel service-entries">
+            <h3>Recorded days</h3>
+            ${entries.length ? `<ul class="service-entry-list">${entries.map((entry) => `
+              <li><span>${escapeHtml(formatDate(entry.date))}</span><strong>${entry.hours.toFixed(2)} hours</strong>
+                <div class="service-entry-actions">
+                  <button type="button" class="button button--secondary" data-action="edit-service-hours" data-date="${entry.date}">Edit</button>
+                  <button type="button" class="button button--danger-subtle" data-action="delete-service-hours" data-date="${entry.date}">Delete</button>
+                </div>
+              </li>`).join("")}</ul>` : "<p>No service hours recorded for this month.</p>"}
+          </article>
           <article class="panel report-explanation">
             <h3>How these totals work</h3>
-            <p><strong>Follow-ups made</strong> counts every successful contact during the selected month. Each conducted Bible-study session also counts as one successful follow-up.</p>
-            <p><strong>Bible studies conducted</strong> counts unique people with at least one conducted study during the month, not the number of sessions.</p>
-            <p>Attempts, missed studies, and scheduled studies that did not occur are not counted.</p>
+            <p><strong>Service hours</strong> adds the saved daily decimal hours for the selected month.</p>
+            <p><strong>Bible studies conducted</strong> counts unique people with at least one conducted study during the month, not the number of sessions. Attempts and missed studies are not counted.</p>
           </article>
         </section>`;
     },
@@ -1024,7 +1067,7 @@
         <section aria-labelledby="data-title">
           <header class="screen-heading"><h2 id="data-title">Data &amp; Settings</h2><p>Local persistence and complete Backup/Restore are active.</p></header>
           <article class="panel"><p class="section-label">Application status</p><dl class="status-list"><div class="status-row"><dt>Data version</dt><dd>${appState.dataVersion}</dd></div><div class="status-row"><dt>Backup format</dt><dd>${BACKUP_FORMAT_VERSION}</dd></div><div class="status-row"><dt>Storage</dt><dd>On this device</dd></div><div class="status-row"><dt>Contacts</dt><dd>${appState.contacts.length}</dd></div></dl></article>
-          <article class="panel data-action-panel"><div><p class="section-label">Backup</p><h3>Export Complete Backup</h3><p>Download all contacts, schedules, study information, settings, and history as one JSON file.</p></div><button class="button button--primary" type="button" data-action="export-backup">Export Backup</button></article>
+          <article class="panel data-action-panel"><div><p class="section-label">Backup</p><h3>Export Complete Backup</h3><p>Download all contacts, schedules, study information, service hours, settings, and history as one JSON file.</p></div><button class="button button--primary" type="button" data-action="export-backup">Export Backup</button></article>
           <article class="panel data-action-panel"><div><p class="section-label">Restore</p><h3>Restore from Backup</h3><p>The selected file is parsed, validated, and version-checked before replacement is offered.</p></div><label class="button button--secondary file-button" for="restore-file">Choose Backup File</label><input class="visually-hidden" id="restore-file" name="restoreFile" type="file" accept="application/json,.json"></article>
           ${restoreMessage ? `<p class="restore-message restore-message--${restoreMessageType || "neutral"}" role="status">${escapeHtml(restoreMessage)}</p>` : ""}
           ${pendingRestore ? `<article class="panel restore-confirmation"><p class="section-label">Validated backup</p><h3>Ready to Replace Current Data</h3><dl class="status-list"><div class="status-row"><dt>Backup created</dt><dd>${escapeHtml(createdText)}</dd></div><div class="status-row"><dt>Contacts</dt><dd>${pendingRestore.contactCount}</dd></div><div class="status-row"><dt>History entries</dt><dd>${pendingRestore.historyCount}</dd></div></dl><p>This will replace the complete current dataset. Export the current data first if you may need to recover it.</p><div class="form-actions"><button class="button button--danger-subtle" type="button" data-action="confirm-restore">Replace Current Data</button><button class="button button--secondary" type="button" data-action="cancel-restore">Cancel</button></div></article>` : ""}
@@ -1332,6 +1375,30 @@
     renderActiveScreen();
   }
 
+  function saveServiceHours(form) {
+    const date = new FormData(form).get("serviceDate");
+    const raw = String(new FormData(form).get("serviceHours") ?? "").trim();
+    const hours = Number(raw);
+    if (!isValidDateValue(date, false) || !/^(?:\\d+)(?:\\.\\d{1,2})?$/.test(raw) ||
+        !isValidServiceHoursEntry({ date, hours })) {
+      window.alert("Enter a valid date and decimal hours from 0 to 24, with no more than two decimal places.");
+      return;
+    }
+    const nextEntries = appState.serviceHours.filter((entry) => entry.date !== date);
+    nextEntries.push({ date, hours });
+    appState = persistence.save({ ...appState, serviceHours: nextEntries });
+    reportMonth = date.slice(0, 7);
+    serviceDate = date;
+    renderActiveScreen();
+  }
+
+  function deleteServiceHours(date) {
+    if (!appState.serviceHours.some((entry) => entry.date === date)) return;
+    if (!window.confirm(`Delete service hours for ${date}? This cannot be undone.`)) return;
+    appState = persistence.save({ ...appState, serviceHours: appState.serviceHours.filter((entry) => entry.date !== date) });
+    renderActiveScreen();
+  }
+
   function handleAction(actionElement) {
     const { action, contactId } = actionElement.dataset;
     if (action === "open-contacts") selectScreen("contacts");
@@ -1439,6 +1506,12 @@
       renderActiveScreen();
     }
     if (action === "resume-contact") resumeContact(contactId);
+    if (action === "edit-service-hours") {
+      serviceDate = actionElement.dataset.date;
+      renderActiveScreen();
+      mainElement.querySelector("#service-hours")?.focus();
+    }
+    if (action === "delete-service-hours") deleteServiceHours(actionElement.dataset.date);
     if (action === "export-backup") exportBackup();
     if (action === "cancel-restore") cancelRestore();
     if (action === "confirm-restore") commitRestore();
@@ -1456,6 +1529,10 @@
       if (actionElement) handleAction(actionElement);
     });
     mainElement.addEventListener("submit", (event) => {
+      if (event.target.id === "service-hours-form") {
+        event.preventDefault();
+        saveServiceHours(event.target);
+      }
       if (event.target.id === "contact-form") {
         event.preventDefault();
         saveContact(event.target);
@@ -1478,6 +1555,12 @@
       }
     });
     mainElement.addEventListener("input", (event) => {
+      if (event.target.name === "serviceDate" && isValidDateValue(event.target.value, false)) {
+        serviceDate = event.target.value;
+        const existing = appState.serviceHours.find((entry) => entry.date === serviceDate);
+        const hoursInput = mainElement.querySelector("#service-hours");
+        if (hoursInput) hoursInput.value = existing ? existing.hours.toFixed(2) : "";
+      }
       if (event.target.name === "contactSearch") {
         contactSearchQuery = event.target.value;
         const results = renderContactResults();
@@ -1488,6 +1571,7 @@
       }
       if (event.target.name === "reportMonth" && /^\d{4}-\d{2}$/.test(event.target.value)) {
         reportMonth = event.target.value;
+        serviceDate = reportMonth === currentMonthValue() ? todayDateValue() : `${reportMonth}-01`;
         renderActiveScreen();
       }
       if (event.target.name === "name" && event.target.value.trim()) {
